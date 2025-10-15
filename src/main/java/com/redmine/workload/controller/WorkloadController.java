@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.DayOfWeek;
+import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 @Controller
@@ -43,7 +45,7 @@ public class WorkloadController {
     @PostMapping("/workload")
     public String getWorkload(
             @RequestParam("groupName") String groupName,
-            @RequestParam(value = "userFullname", required = false) String userFullname,
+            @RequestParam(value = "userFullname", required = false) String[] userFullnames,
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             Model model) {
@@ -51,31 +53,41 @@ public class WorkloadController {
         System.out.println("========================================");
         System.out.println("POST /workload - Request Parameters:");
         System.out.println("Group Name: [" + groupName + "]");
-        System.out.println("User Fullname: [" + userFullname + "]");
+        System.out.println("User Fullnames: " + (userFullnames != null ? Arrays.toString(userFullnames) : "[]"));
         System.out.println("Start Date: " + startDate);
         System.out.println("End Date: " + endDate);
         
         // 處理空的使用者選擇
-        if (userFullname != null && userFullname.trim().isEmpty()) {
-            userFullname = null;
+        List<String> selectedUsers = new ArrayList<>();
+        if (userFullnames != null) {
+            for (String user : userFullnames) {
+                if (user != null && !user.trim().isEmpty()) {
+                    selectedUsers.add(user.trim());
+                }
+            }
         }
         
-        boolean isGroupQuery = (userFullname == null);
+        // 當選擇使用者時（包含單選和多選），都按使用者分組顯示；只有查詢整個群組時才不分組
+        boolean isGroupQuery = !selectedUsers.isEmpty();
         System.out.println("Is Group Query: " + isGroupQuery);
+        System.out.println("Selected Users: " + selectedUsers);
         System.out.println("========================================");
         
-        WorkloadStatistics statistics = workloadService.getWorkloadStatistics(
-            groupName, userFullname, startDate, endDate);
+        // 使用新的多使用者查詢方法
+        WorkloadStatistics statistics = workloadService.getWorkloadStatisticsForMultipleUsers(
+            groupName, selectedUsers, startDate, endDate);
         
         System.out.println("Statistics - Total Issues: " + statistics.getTotalIssues());
         System.out.println("Statistics - Total Hours: " + statistics.getTotalEstimatedHours());
         
         List<String> groups = workloadService.getAllGroups();
+        List<String> users = workloadService.getUsersByGroup(groupName);
         
         model.addAttribute("statistics", statistics);
         model.addAttribute("groups", groups);
+        model.addAttribute("users", users);
         model.addAttribute("selectedGroup", groupName);
-        model.addAttribute("selectedUser", userFullname);
+        model.addAttribute("selectedUsers", selectedUsers);
         model.addAttribute("selectedStartDate", startDate.toString());
         model.addAttribute("selectedEndDate", endDate.toString());
         model.addAttribute("isGroupQuery", isGroupQuery);
@@ -86,7 +98,7 @@ public class WorkloadController {
     @PostMapping("/workload2d")
     public String getWorkload2D(
             @RequestParam("groupName") String groupName,
-            @RequestParam(value = "userFullname", required = false) String userFullname,
+            @RequestParam(value = "userFullname", required = false) String[] userFullnames,
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(value = "timeGranularity", defaultValue = "daily") String timeGranularity,
@@ -95,21 +107,35 @@ public class WorkloadController {
         System.out.println("========================================");
         System.out.println("POST /workload2d - Request Parameters:");
         System.out.println("Group Name: " + groupName);
-        System.out.println("User Fullname: " + (userFullname != null ? userFullname : "Not selected (Group query)"));
+        System.out.println("User Fullnames: " + (userFullnames != null ? Arrays.toString(userFullnames) : "[]"));
         System.out.println("Start Date: " + startDate);
         System.out.println("End Date: " + endDate);
         System.out.println("Time Granularity: " + timeGranularity);
         
-        boolean isGroupQuery = (userFullname == null);
+        // 處理空的使用者選擇
+        List<String> selectedUsers = new ArrayList<>();
+        if (userFullnames != null) {
+            for (String user : userFullnames) {
+                if (user != null && !user.trim().isEmpty()) {
+                    selectedUsers.add(user.trim());
+                }
+            }
+        }
+        
+        // 當選擇使用者時（包含單選和多選），都按使用者分組顯示；只有查詢整個群組時才不分組
+        boolean isGroupQuery = !selectedUsers.isEmpty();
         System.out.println("Is Group Query: " + isGroupQuery);
+        System.out.println("Selected Users: " + selectedUsers);
         System.out.println("========================================");
         
-        List<WorkloadAnalysis2D> analysis2D = workloadService.getWorkloadAnalysis2D(
-            groupName, userFullname, startDate, endDate, timeGranularity);
+        // 使用新的多使用者查詢方法
+        List<WorkloadAnalysis2D> analysis2D = workloadService.getWorkloadAnalysis2DForMultipleUsers(
+            groupName, selectedUsers, startDate, endDate, timeGranularity);
         
         System.out.println("2D Analysis - Total Items: " + analysis2D.size());
         
         List<String> groups = workloadService.getAllGroups();
+        List<String> users = workloadService.getUsersByGroup(groupName);
         
         // 計算日期範圍的天數
         long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
@@ -144,8 +170,9 @@ public class WorkloadController {
         
         model.addAttribute("analysis2D", analysis2D);
         model.addAttribute("groups", groups);
+        model.addAttribute("users", users);
         model.addAttribute("selectedGroup", groupName);
-        model.addAttribute("selectedUser", userFullname);
+        model.addAttribute("selectedUsers", selectedUsers);
         model.addAttribute("selectedStartDate", startDate.toString());
         model.addAttribute("selectedEndDate", endDate.toString());
         model.addAttribute("timeGranularity", timeGranularity);

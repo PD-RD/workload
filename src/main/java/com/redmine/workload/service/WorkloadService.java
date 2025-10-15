@@ -69,6 +69,60 @@ public class WorkloadService {
         return statistics;
     }
 
+    // 支援多使用者查詢的版本
+    public WorkloadStatistics getWorkloadStatisticsForMultipleUsers(String groupName, List<String> userFullnames,
+                                                                    LocalDate startDate, LocalDate endDate) {
+        List<WorkloadData> allWorkloadList = new ArrayList<>();
+        
+        if (userFullnames == null || userFullnames.isEmpty()) {
+            // 如果沒有指定使用者，查詢整個群組
+            allWorkloadList = workloadRepository.getWorkloadData(groupName, null, startDate, endDate);
+        } else {
+            // 為每個使用者查詢資料並合併
+            for (String userFullname : userFullnames) {
+                List<WorkloadData> userWorkloadList = workloadRepository.getWorkloadData(
+                    groupName, userFullname, startDate, endDate);
+                allWorkloadList.addAll(userWorkloadList);
+            }
+        }
+
+        WorkloadStatistics statistics = new WorkloadStatistics();
+        statistics.setWorkloadList(allWorkloadList);
+        statistics.setTotalIssues(allWorkloadList.size());
+
+        BigDecimal totalHours = BigDecimal.ZERO;
+        BigDecimal totalAvgHours = BigDecimal.ZERO;
+        int closedCount = 0;
+
+        for (WorkloadData data : allWorkloadList) {
+            if (data.getEstimatedHours() != null) {
+                totalHours = totalHours.add(data.getEstimatedHours());
+            }
+            if (data.getAvgHoursPerDay() != null) {
+                totalAvgHours = totalAvgHours.add(data.getAvgHoursPerDay());
+            }
+            if (data.getIsClosed() != null && data.getIsClosed()) {
+                closedCount++;
+            }
+        }
+
+        statistics.setTotalEstimatedHours(totalHours);
+        statistics.setClosedIssues(closedCount);
+        statistics.setOpenIssues(allWorkloadList.size() - closedCount);
+
+        if (allWorkloadList.size() > 0) {
+            statistics.setAvgHoursPerDay(
+                totalAvgHours.divide(BigDecimal.valueOf(allWorkloadList.size()), 2, RoundingMode.HALF_UP));
+            statistics.setCompletionRate(
+                (double) closedCount / allWorkloadList.size() * 100);
+        } else {
+            statistics.setAvgHoursPerDay(BigDecimal.ZERO);
+            statistics.setCompletionRate(0.0);
+        }
+
+        return statistics;
+    }
+
     public List<String> getAllGroups() {
         return workloadRepository.getAllGroups();
     }
@@ -197,10 +251,8 @@ public class WorkloadService {
                 projectDailyTotalsMap.put(projectName, projectDailyTotals);
             }
             
-            // 計算使用者總工時
-            BigDecimal userTotalHours = userItems.stream()
-                .map(WorkloadAnalysis2D::getEstimatedHours)
-                .filter(Objects::nonNull)
+            // 計算使用者在查詢區間內的總工時（基於每日分配的工時）
+            BigDecimal userTotalHours = userDailyTotals.values().stream()
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             
             // 創建使用者層級的匯總數據
@@ -236,10 +288,9 @@ public class WorkloadService {
                 String projectName = projectEntry.getKey();
                 List<WorkloadAnalysis2D> projectItems = projectEntry.getValue();
                 
-                // 計算專案總工時
-                BigDecimal projectTotalHours = projectItems.stream()
-                    .map(WorkloadAnalysis2D::getEstimatedHours)
-                    .filter(Objects::nonNull)
+                // 計算專案在查詢區間內的總工時（基於每日分配的工時）
+                Map<LocalDate, BigDecimal> projectDailyTotals = projectDailyTotalsMap.get(projectName);
+                BigDecimal projectTotalHours = projectDailyTotals.values().stream()
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
                 
                 // 創建專案層級的匯總數據
@@ -253,7 +304,6 @@ public class WorkloadService {
                 
                 // 為專案創建每日工作量分佈
                 List<WorkloadAnalysis2D.DailyWorkload> projectDailyWorkloads = new ArrayList<>();
-                Map<LocalDate, BigDecimal> projectDailyTotals = projectDailyTotalsMap.get(projectName);
                 
                 current = startDate;
                 while (!current.isAfter(endDate)) {
@@ -396,9 +446,8 @@ public class WorkloadService {
                 projectSummary.setProjectName(projectName);
                 projectSummary.setIssueId(-2L);
                 
-                BigDecimal projectTotalHours = projectItems.stream()
-                    .map(WorkloadAnalysis2D::getEstimatedHours)
-                    .filter(Objects::nonNull)
+                // 計算專案在查詢區間內的總工時（基於週工時累加）
+                BigDecimal projectTotalHours = projectWeeklyTotals.values().stream()
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
                 projectSummary.setIssueSubject("專案總工時: " + projectTotalHours + " 小時");
                 projectSummary.setEstimatedHours(projectTotalHours);
@@ -424,9 +473,8 @@ public class WorkloadService {
             userSummary.setProjectName("總計");
             userSummary.setIssueId(-1L);
             
-            BigDecimal userTotalHours = userItems.stream()
-                .map(WorkloadAnalysis2D::getEstimatedHours)
-                .filter(Objects::nonNull)
+            // 計算使用者在查詢區間內的總工時（基於週工時累加）
+            BigDecimal userTotalHours = userWeeklyTotals.values().stream()
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             userSummary.setIssueSubject("總工時: " + userTotalHours + " 小時");
             userSummary.setEstimatedHours(userTotalHours);
@@ -555,9 +603,8 @@ public class WorkloadService {
                 projectSummary.setProjectName(projectName);
                 projectSummary.setIssueId(-2L);
                 
-                BigDecimal projectTotalHours = projectItems.stream()
-                    .map(WorkloadAnalysis2D::getEstimatedHours)
-                    .filter(Objects::nonNull)
+                // 計算專案在查詢區間內的總工時（基於月工時累加）
+                BigDecimal projectTotalHours = projectMonthlyTotals.values().stream()
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
                 projectSummary.setIssueSubject("專案總工時: " + projectTotalHours + " 小時");
                 projectSummary.setEstimatedHours(projectTotalHours);
@@ -583,9 +630,8 @@ public class WorkloadService {
             userSummary.setProjectName("總計");
             userSummary.setIssueId(-1L);
             
-            BigDecimal userTotalHours = userItems.stream()
-                .map(WorkloadAnalysis2D::getEstimatedHours)
-                .filter(Objects::nonNull)
+            // 計算使用者在查詢區間內的總工時（基於月工時累加）
+            BigDecimal userTotalHours = userMonthlyTotals.values().stream()
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             userSummary.setIssueSubject("總工時: " + userTotalHours + " 小時");
             userSummary.setEstimatedHours(userTotalHours);
@@ -604,5 +650,32 @@ public class WorkloadService {
         }
         
         return result;
+    }
+
+    // 支援多使用者查詢的 2D 分析版本
+    public List<WorkloadAnalysis2D> getWorkloadAnalysis2DForMultipleUsers(String groupName, List<String> userFullnames,
+                                                                          LocalDate startDate, LocalDate endDate, String timeGranularity) {
+        List<WorkloadAnalysis2D> allRawData = new ArrayList<>();
+        
+        if (userFullnames == null || userFullnames.isEmpty()) {
+            // 如果沒有指定使用者，查詢整個群組
+            allRawData = workloadRepository.getWorkloadAnalysis2D(groupName, null, startDate, endDate);
+        } else {
+            // 為每個使用者查詢資料並合併
+            for (String userFullname : userFullnames) {
+                List<WorkloadAnalysis2D> userRawData = workloadRepository.getWorkloadAnalysis2D(
+                    groupName, userFullname, startDate, endDate);
+                allRawData.addAll(userRawData);
+            }
+        }
+        
+        // 根據時間顆粒度選擇處理邏輯
+        if ("weekly".equals(timeGranularity)) {
+            return processWeeklyAnalysis(allRawData, startDate, endDate);
+        } else if ("monthly".equals(timeGranularity)) {
+            return processMonthlyAnalysis(allRawData, startDate, endDate);
+        } else {
+            return processDailyAnalysis(allRawData, startDate, endDate);
+        }
     }
 }
