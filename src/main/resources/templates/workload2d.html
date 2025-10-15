@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redmine 工作負載 2D 分析</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .back-btn {
+            position: absolute;
+            left: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .info-section {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .info-item label {
+            font-weight: 600;
+            color: #495057;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .info-item span {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .analysis-section {
+            padding: 30px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+
+        .workload-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 12px;
+        }
+
+        .workload-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 8px;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #ddd;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .workload-table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+            vertical-align: middle;
+        }
+
+        .workload-table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .workload-table tbody tr:hover {
+            background-color: #e3f2fd;
+        }
+
+        /* 議題資訊欄位 */
+        .issue-info {
+            text-align: left !important;
+            min-width: 200px;
+            max-width: 300px;
+        }
+
+        .issue-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .issue-details {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        /* 日期欄位樣式 */
+        .date-header {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            min-width: 40px;
+            max-width: 40px;
+        }
+
+        .workload-cell {
+            min-width: 40px;
+            max-width: 40px;
+            font-weight: 600;
+        }
+
+        /* 工作量數值的顏色編碼 */
+        .workload-zero {
+            background-color: #f8f9fa;
+            color: #6c757d;
+        }
+
+        .workload-normal {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .workload-high {
+            background-color: #ffeaa7;
+            color: #d63031;
+            font-weight: bold;
+            border: 2px solid #fdcb6e;
+        }
+
+        .workload-overdue {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .weekend {
+            background-color: #e9ecef;
+            color: #6c757d;
+        }
+
+        /* 響應式設計 */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+
+            .header {
+                padding: 20px 15px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .back-btn {
+                left: 15px;
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+
+            .info-section {
+                padding: 15px;
+            }
+
+            .analysis-section {
+                padding: 15px;
+            }
+
+            .workload-table {
+                font-size: 10px;
+            }
+
+            .workload-table th,
+            .workload-table td {
+                padding: 6px 4px;
+            }
+        }
+
+        .legend {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .legend h4 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+        }
+
+        .month-header {
+            text-align: center;
+        }
+
+        /* 分層展開相關樣式 */
+        .expandable-row {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .expandable-row:hover {
+            background-color: #e3f2fd !important;
+        }
+
+        .expand-icon {
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform 0.3s ease;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .expand-icon.expanded {
+            transform: rotate(90deg);
+        }
+
+        .user-summary {
+            background-color: #e8f4fd !important;
+            font-weight: bold;
+            color: #1976d2;
+        }
+
+        .project-summary {
+            background-color: #f3f9ff !important;
+            font-weight: 600;
+            color: #1565c0;
+        }
+
+        .issue-detail {
+            background-color: #fafafa;
+            color: #424242;
+        }
+
+        .collapsed {
+            display: none;
+        }
+
+        .level-0 { padding-left: 10px !important; }
+        .level-1 { padding-left: 30px !important; }
+        .level-2 { padding-left: 50px !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-btn">← 返回首頁</a>
+            <h1>Redmine 工作負載 2D 分析</h1>
+            <p>議題工作量日期分佈視覺化分析</p>
+        </div>
+
+        <div class="info-section">
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>群組名稱：</label>
+                    <span th:text="${selectedGroup}"></span>
+                </div>
+                <div class="info-item">
+                    <label>使用者：</label>
+                    <span th:text="${selectedUser != null ? selectedUser : '全群組'}"></span>
+                </div>
+                <div class="info-item">
+                    <label>分析期間：</label>
+                    <span th:text="${selectedStartDate + ' ~ ' + selectedEndDate}"></span>
+                </div>
+                <div class="info-item">
+                    <label>時間顆粒度：</label>
+                    <span th:text="${timeGranularity == 'daily' ? '📅 每日' : (timeGranularity == 'weekly' ? '📊 每週' : '📈 每月')}"></span>
+                </div>
+                <div class="info-item">
+                    <label>議題數量：</label>
+                    <span th:text="${analysis2D != null ? analysis2D.size() : 0}"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="analysis-section">
+            <div class="legend">
+                <h4>圖例說明</h4>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color workload-zero"></div>
+                        <span>0.0 - 無工作量</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color workload-normal"></div>
+                        <span>正常工作量</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color workload-high"></div>
+                        <span>高工作量 (≥8小時)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color workload-overdue"></div>
+                        <span>過期工作</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color weekend"></div>
+                        <span>週末</span>
+                    </div>
+                </div>
+            </div>
+
+            <div th:if="${analysis2D != null and !analysis2D.isEmpty()}">
+                <div class="table-container">
+                    <table class="workload-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" class="issue-info">議題資訊</th>
+                                <!-- 每日模式：動態顯示期間內的所有月份 -->
+                                <th th:if="${timeGranularity == 'daily'}" 
+                                    th:text="${#temporals.format(startDate, 'yyyy年MM月')} + 
+                                             (${startDate.month != endDate.month} ? (' ~ ' + ${#temporals.format(endDate, 'MM月')}) : '')" 
+                                    th:attr="colspan=${daysBetween}" 
+                                    class="month-header"></th>
+                                <!-- 每週模式 -->
+                                <th th:if="${timeGranularity == 'weekly'}" 
+                                    th:text="${#temporals.format(startDate, 'yyyy年')} + ' 週次分析 (' + 
+                                             ${#temporals.format(startDate, 'MM月')} + 
+                                             (${startDate.month != endDate.month} ? (' ~ ' + ${#temporals.format(endDate, 'MM月')}) : '') + ')'" 
+                                    th:attr="colspan=${weekCount}" class="month-header"></th>
+                                <!-- 每月模式 -->
+                                <th th:if="${timeGranularity == 'monthly'}" 
+                                    th:text="${#temporals.format(startDate, 'yyyy年')} + ' 月份分析 (' + 
+                                             ${#temporals.format(startDate, 'MM月')} + 
+                                             (${startDate.month != endDate.month} ? (' ~ ' + ${#temporals.format(endDate, 'MM月')}) : '') + ')'" 
+                                    th:attr="colspan=${monthCount}" class="month-header"></th>
+                            </tr>
+                            <tr>
+                                <!-- 每日模式：動態生成從開始日期到結束日期的所有日期欄位 -->
+                                <th th:if="${timeGranularity == 'daily'}" 
+                                    th:each="i : ${#numbers.sequence(0, daysBetween - 1)}" 
+                                    th:with="currentDate=${startDate.plusDays(i)}"
+                                    th:text="${currentDate.dayOfMonth}"
+                                    th:classappend="${currentDate.dayOfWeek.value == 6 or currentDate.dayOfWeek.value == 7} ? 'weekend' : ''"
+                                    class="date-header">
+                                </th>
+                                
+                                <!-- 每週模式：使用後端計算的週次列表 -->
+                                <th th:if="${timeGranularity == 'weekly'}" 
+                                    th:each="weekNumber : ${weekNumbers}"
+                                    th:text="'W' + ${weekNumber}"
+                                    class="date-header">
+                                </th>
+                                
+                                <!-- 每月模式：動態生成月份欄位 -->
+                                <th th:if="${timeGranularity == 'monthly'}" 
+                                    th:each="i : ${#numbers.sequence(0, monthCount - 1)}"
+                                    th:with="currentMonth=${startDate.plusMonths(i)}"
+                                    th:text="${currentMonth.monthValue} + '月'"
+                                    class="date-header">
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- 分層顯示：使用者 -> 專案 -> 議題 -->
+                            <tr th:each="item, itemStat : ${analysis2D}" 
+                                th:class="${item.issueId == -1} ? 'user-summary expandable-row' : 
+                                          (${item.issueId == -2} ? 'project-summary expandable-row collapsed' : 'issue-detail collapsed')"
+                                th:attr="data-user=${item.userFullname}, 
+                                         data-project=${item.projectName},
+                                         data-level=${item.issueId == -1} ? '0' : (${item.issueId == -2} ? '1' : '2'),
+                                         data-parent=${item.issueId == -2} ? ${item.userFullname} : (${item.issueId > 0} ? ${item.userFullname + '_' + item.projectName} : '')"
+                                th:onclick="${item.issueId == -1 or item.issueId == -2} ? 'toggleExpand(this)' : null">
+                                
+                                <td class="issue-info" 
+                                    th:class="${item.issueId == -1} ? 'issue-info level-0' : 
+                                              (${item.issueId == -2} ? 'issue-info level-1' : 'issue-info level-2')">
+                                    
+                                    <!-- 使用者總計行 -->
+                                    <div th:if="${item.issueId == -1}">
+                                        <span class="expand-icon">▶</span>
+                                        <span class="issue-title" th:text="'👤 ' + ${item.userFullname}"></span>
+                                        <div class="issue-details">
+                                            <span th:text="${item.issueSubject}"></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 專案總計行 -->
+                                    <div th:if="${item.issueId == -2}">
+                                        <span class="expand-icon">▶</span>
+                                        <span class="issue-title" th:text="'📁 ' + ${item.projectName}"></span>
+                                        <div class="issue-details">
+                                            <span th:text="${item.issueSubject}"></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 議題詳細行 -->
+                                    <div th:if="${item.issueId > 0}">
+                                        <div class="issue-title" th:text="'📋 ' + ${item.issueId} + ' - ' + ${item.issueSubject}"></div>
+                                        <div class="issue-details">
+                                            <span th:text="'期間: ' + ${#temporals.format(item.startDate, 'yyyy-MM-dd')} + ' ~ ' + ${#temporals.format(item.dueDate, 'yyyy-MM-dd')}"></span><br/>
+                                            <span th:text="'預估: ' + ${item.estimatedHours} + ' 小時'"></span>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <!-- 每日模式：顯示每日工作量 -->
+                                <td th:if="${timeGranularity == 'daily'}"
+                                    th:each="day : ${item.dailyWorkloads}"
+                                    th:text="${day.status}"
+                                    th:class="${'workload-cell ' + (day.weekend ? 'weekend' : 
+                                               (day.status == '0.0' ? 'workload-zero' : 
+                                               (day.overdue ? 'workload-overdue' : 
+                                               (T(java.lang.Double).parseDouble(day.status) >= 8.0 ? 'workload-high' : 'workload-normal'))))}">
+                                </td>
+                                
+                                <!-- 每週/每月模式：顯示週期工作量 -->
+                                <td th:if="${timeGranularity != 'daily'}"
+                                    th:each="period : ${item.periodWorkloads}"
+                                    th:text="${period.status}"
+                                    th:class="${'workload-cell ' + 
+                                               (period.status == '0.0' ? 'workload-zero' : 
+                                               (T(java.lang.Double).parseDouble(period.status) >= 8.0 ? 'workload-high' : 'workload-normal'))}">
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div th:if="${analysis2D == null or analysis2D.isEmpty()}" class="no-data">
+                <h3>查無資料</h3>
+                <p>請調整查詢條件後重新搜尋</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 動態調整表格樣式
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.querySelector('.workload-table');
+            if (table) {
+                // 為表格添加滾動提示
+                const container = table.closest('.table-container');
+                if (container.scrollWidth > container.clientWidth) {
+                    container.style.border = '2px solid #667eea';
+                    container.title = '表格可左右滾動查看更多內容';
+                }
+            }
+            
+            // 初始化：只顯示使用者總計行
+            initializeExpandState();
+        });
+
+        // 初始化展開狀態：預設只顯示使用者總計
+        function initializeExpandState() {
+            const allRows = document.querySelectorAll('tbody tr');
+            allRows.forEach(row => {
+                const level = row.getAttribute('data-level');
+                if (level === '1' || level === '2') {
+                    row.classList.add('collapsed');
+                }
+            });
+        }
+
+        // 切換展開/收合狀態
+        function toggleExpand(clickedRow) {
+            const level = clickedRow.getAttribute('data-level');
+            const icon = clickedRow.querySelector('.expand-icon');
+            const isExpanded = icon.classList.contains('expanded');
+            
+            if (level === '0') {
+                // 使用者層級：切換該使用者下的所有專案
+                toggleUserProjects(clickedRow, !isExpanded);
+            } else if (level === '1') {
+                // 專案層級：切換該專案下的所有議題
+                toggleProjectIssues(clickedRow, !isExpanded);
+            }
+            
+            // 更新圖示
+            if (isExpanded) {
+                icon.classList.remove('expanded');
+                icon.textContent = '▶';
+            } else {
+                icon.classList.add('expanded');
+                icon.textContent = '▼';
+            }
+        }
+
+        // 切換使用者下的專案顯示
+        function toggleUserProjects(userRow, expand) {
+            const userName = userRow.getAttribute('data-user');
+            const allRows = document.querySelectorAll('tbody tr');
+            
+            allRows.forEach(row => {
+                const rowUser = row.getAttribute('data-user');
+                const rowLevel = row.getAttribute('data-level');
+                
+                if (rowUser === userName && rowLevel === '1') {
+                    // 專案行
+                    if (expand) {
+                        row.classList.remove('collapsed');
+                    } else {
+                        row.classList.add('collapsed');
+                        // 同時收合該專案下的議題
+                        const projectName = row.getAttribute('data-project');
+                        hideProjectIssues(userName, projectName);
+                        // 重置專案的展開圖示
+                        const projectIcon = row.querySelector('.expand-icon');
+                        if (projectIcon) {
+                            projectIcon.classList.remove('expanded');
+                            projectIcon.textContent = '▶';
+                        }
+                    }
+                }
+            });
+        }
+
+        // 切換專案下的議題顯示
+        function toggleProjectIssues(projectRow, expand) {
+            const userName = projectRow.getAttribute('data-user');
+            const projectName = projectRow.getAttribute('data-project');
+            const allRows = document.querySelectorAll('tbody tr');
+            
+            allRows.forEach(row => {
+                const rowUser = row.getAttribute('data-user');
+                const rowProject = row.getAttribute('data-project');
+                const rowLevel = row.getAttribute('data-level');
+                
+                if (rowUser === userName && rowProject === projectName && rowLevel === '2') {
+                    if (expand) {
+                        row.classList.remove('collapsed');
+                    } else {
+                        row.classList.add('collapsed');
+                    }
+                }
+            });
+        }
+
+        // 隱藏專案下的所有議題
+        function hideProjectIssues(userName, projectName) {
+            const allRows = document.querySelectorAll('tbody tr');
+            
+            allRows.forEach(row => {
+                const rowUser = row.getAttribute('data-user');
+                const rowProject = row.getAttribute('data-project');
+                const rowLevel = row.getAttribute('data-level');
+                
+                if (rowUser === userName && rowProject === projectName && rowLevel === '2') {
+                    row.classList.add('collapsed');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

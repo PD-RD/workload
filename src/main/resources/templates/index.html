@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redmine 工作負載統計系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .filter-section {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .filter-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+            font-size: 0.95em;
+        }
+
+        .form-group select,
+        .form-group input[type="date"] {
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .form-group select:focus,
+        .form-group input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-search {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            align-self: end;
+        }
+
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            align-self: end;
+        }
+
+        .btn-2d {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-2d:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .statistics-section {
+            padding: 30px;
+            display: none;
+        }
+
+        .statistics-section.show {
+            display: block;
+        }
+
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        .chart-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+
+        .table-section {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 0.9em;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge-closed {
+            background: #28a745;
+            color: white;
+        }
+
+        .badge-open {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .project-accordion {
+            margin-top: 20px;
+        }
+
+        .project-item {
+            margin-bottom: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .project-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .project-header:hover {
+            background: linear-gradient(135deg, #5a73e6 0%, #6a419e 100%);
+        }
+
+        .project-title-section {
+            flex: 1;
+        }
+
+        .project-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 0 0 5px 0;
+        }
+
+        .project-duration {
+            margin-top: 3px;
+        }
+
+        .duration-text {
+            font-size: 0.85em;
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 2px 8px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .project-summary {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+
+        .project-cost {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .project-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+        }
+
+        .expand-icon {
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }
+
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+        .project-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background: white;
+        }
+
+        .project-content.expanded {
+            max-height: 2000px;
+        }
+
+        .issues-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+
+        .issues-table th {
+            background: #f8f9fa;
+            color: #495057;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .issues-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 0.9em;
+        }
+
+        .issues-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .issue-subject {
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
+        .section-title {
+            padding: 20px 0;
+            color: #495057;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .filter-form {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container {
+                height: 300px;
+            }
+
+            .project-header {
+                padding: 12px 15px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .project-title-section {
+                width: 100%;
+            }
+
+            .project-summary {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .project-title {
+                font-size: 1em;
+                margin-bottom: 3px;
+            }
+
+            .duration-text {
+                font-size: 0.75em;
+                padding: 1px 6px;
+            }
+
+            .issues-table {
+                font-size: 0.8em;
+            }
+
+            .issues-table th,
+            .issues-table td {
+                padding: 8px 6px;
+            }
+
+            .issue-subject {
+                max-width: 150px;
+            }
+
+            .project-cost,
+            .project-count {
+                font-size: 0.8em;
+                padding: 3px 8px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Redmine 工作負載統計系統</h1>
+            <p>工作負載分析與視覺化平台</p>
+        </div>
+
+        <div class="filter-section">
+            <form id="workloadForm" action="/workload" method="post" class="filter-form">
+                <div class="form-group">
+                    <label for="groupName">部門群組</label>
+                    <select id="groupName" name="groupName" required onchange="loadUsers()">
+                        <option value="">請選擇部門</option>
+                        <option th:each="group : ${groups}" 
+                                th:value="${group}" 
+                                th:text="${group}"
+                                th:selected="${group == selectedGroup}"></option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="userFullname">使用者 (可選)</label>
+                    <select id="userFullname" name="userFullname">
+                        <option value="">🏢 全部成員 (整個部門)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="startDate">開始日期</label>
+                    <input type="date" id="startDate" name="startDate" 
+                           th:value="${selectedStartDate != null ? selectedStartDate : defaultStartDate}" 
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="endDate">結束日期</label>
+                    <input type="date" id="endDate" name="endDate" 
+                           th:value="${selectedEndDate != null ? selectedEndDate : defaultEndDate}" 
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="timeGranularity">時間顆粒度</label>
+                    <select id="timeGranularity" name="timeGranularity">
+                        <option value="daily">📅 每日</option>
+                        <option value="weekly">📊 每週</option>
+                        <option value="monthly">📈 每月</option>
+                    </select>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn-search">🔍 查詢統計</button>
+                    <button type="button" class="btn-2d" onclick="submit2DAnalysis()">📊 2D分析</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="statistics-section" th:classappend="${statistics != null ? 'show' : ''}">
+            <div class="stats-cards" th:if="${statistics != null}">
+                <div class="stat-card">
+                    <h3>總工時估計</h3>
+                    <div class="value" th:text="${statistics.totalEstimatedHours} + ' hrs'">0 hrs</div>
+                </div>
+                <div class="stat-card">
+                    <h3>日均工時</h3>
+                    <div class="value" th:text="${statistics.avgHoursPerDay} + ' hrs'">0 hrs</div>
+                </div>
+                <div class="stat-card">
+                    <h3>總議題數</h3>
+                    <div class="value" th:text="${statistics.totalIssues}">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>已完成</h3>
+                    <div class="value" th:text="${statistics.closedIssues}">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>進行中</h3>
+                    <div class="value" th:text="${statistics.openIssues}">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>完成率</h3>
+                    <div class="value" th:text="${#numbers.formatDecimal(statistics.completionRate, 1, 1)} + '%'">0%</div>
+                </div>
+            </div>
+
+            <div class="chart-section" th:if="${statistics != null && statistics.totalIssues > 0}">
+                <h2>📈 工作負載圖表分析</h2>
+                <div class="chart-container">
+                    <canvas id="workloadChart"></canvas>
+                </div>
+            </div>
+
+            <div class="table-section" th:if="${statistics != null && statistics.workloadList.size() > 0}">
+                <h2 class="section-title" th:text="${isGroupQuery ? '👥 部門成員工作清單' : '📋 專案工作清單'}">📋 工作清單</h2>
+                <div class="project-accordion" id="projectAccordion">
+                    <!-- 使用 JavaScript 動態生成分組 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        // 載入使用者列表
+        function loadUsers() {
+            const groupName = document.getElementById('groupName').value;
+            const userSelect = document.getElementById('userFullname');
+            
+            if (!groupName) {
+                userSelect.innerHTML = '<option value="">🏢 全部成員 (請先選擇部門)</option>';
+                return;
+            }
+
+            fetch(`/api/users/${encodeURIComponent(groupName)}`)
+                .then(response => response.json())
+                .then(users => {
+                    userSelect.innerHTML = '<option value="">🏢 全部成員 (整個部門)</option>';
+                    users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user;
+                        option.textContent = '👤 ' + user;
+                        
+                        const selectedUser = /*[[${selectedUser}]]*/ '';
+                        if (user === selectedUser) {
+                            option.selected = true;
+                        }
+                        
+                        userSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading users:', error);
+                    userSelect.innerHTML = '<option value="">❌ 載入失敗</option>';
+                });
+        }
+
+        // 頁面載入時執行
+        window.addEventListener('DOMContentLoaded', function() {
+            const selectedGroup = /*[[${selectedGroup}]]*/ '';
+            if (selectedGroup) {
+                loadUsers();
+            }
+
+            // 繪製圖表和生成專案列表
+            const statistics = /*[[${statistics}]]*/ null;
+            if (statistics && statistics.workloadList && statistics.workloadList.length > 0) {
+                drawChart(statistics);
+                generateProjectAccordion(statistics);
+            }
+        });
+
+        // 繪製工作負載圖表
+        function drawChart(statistics) {
+            const ctx = document.getElementById('workloadChart');
+            if (!ctx) return;
+
+            // 依專案統計工時
+            const projectData = {};
+            statistics.workloadList.forEach(item => {
+                if (!projectData[item.projectName]) {
+                    projectData[item.projectName] = 0;
+                }
+                projectData[item.projectName] += parseFloat(item.estimatedHours || 0);
+            });
+
+            const labels = Object.keys(projectData);
+            const data = Object.values(projectData);
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '估計工時 (小時)',
+                        data: data,
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: '各專案工時分布',
+                            font: {
+                                size: 16
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' hrs';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 生成專案手風琴式列表
+        function generateProjectAccordion(statistics) {
+            const accordion = document.getElementById('projectAccordion');
+            if (!accordion) return;
+
+            const isGroupQuery = /*[[${isGroupQuery}]]*/ false;
+            
+            if (isGroupQuery) {
+                // 群組查詢：按使用者分組
+                generateUserAccordion(statistics, accordion);
+            } else {
+                // 個人查詢：按專案分組
+                generateProjectGroups(statistics, accordion);
+            }
+        }
+
+        // 按使用者分組顯示
+        function generateUserAccordion(statistics, accordion) {
+            const userGroups = {};
+            statistics.workloadList.forEach(item => {
+                if (!userGroups[item.userFullname]) {
+                    userGroups[item.userFullname] = {
+                        issues: [],
+                        totalHours: 0,
+                        totalIssues: 0,
+                        earliestStart: null,
+                        latestEnd: null
+                    };
+                }
+                userGroups[item.userFullname].issues.push(item);
+                userGroups[item.userFullname].totalHours += parseFloat(item.estimatedHours || 0);
+                userGroups[item.userFullname].totalIssues++;
+
+                // 計算最早開始時間和最晚結束時間
+                const startDate = new Date(item.startDate);
+                const endDate = new Date(item.dueDate);
+                
+                if (!userGroups[item.userFullname].earliestStart || startDate < userGroups[item.userFullname].earliestStart) {
+                    userGroups[item.userFullname].earliestStart = startDate;
+                }
+                
+                if (!userGroups[item.userFullname].latestEnd || endDate > userGroups[item.userFullname].latestEnd) {
+                    userGroups[item.userFullname].latestEnd = endDate;
+                }
+            });
+
+            // 生成使用者手風琴 HTML
+            let accordionHTML = '';
+            Object.keys(userGroups).forEach((userName, index) => {
+                const user = userGroups[userName];
+                
+                const startDateStr = user.earliestStart ? user.earliestStart.toLocaleDateString('zh-TW') : '未設定';
+                const endDateStr = user.latestEnd ? user.latestEnd.toLocaleDateString('zh-TW') : '未設定';
+                
+                accordionHTML += `
+                    <div class="project-item">
+                        <div class="project-header" onclick="toggleProject(${index})">
+                            <div class="project-title-section">
+                                <h3 class="project-title">👤 ${userName}</h3>
+                                <div class="project-duration">
+                                    <span class="duration-text">📅 ${startDateStr} ~ ${endDateStr}</span>
+                                </div>
+                            </div>
+                            <div class="project-summary">
+                                <span class="project-cost">💰 ${user.totalHours.toFixed(1)} hrs</span>
+                                <span class="project-count">📋 ${user.totalIssues} 個議題</span>
+                                <span class="expand-icon" id="icon-${index}">▼</span>
+                            </div>
+                        </div>
+                        <div class="project-content" id="content-${index}">
+                            <table class="issues-table">
+                                <thead>
+                                    <tr>
+                                        <th>議題編號</th>
+                                        <th>專案名稱</th>
+                                        <th>議題主旨</th>
+                                        <th>開始日期</th>
+                                        <th>結束日期</th>
+                                        <th>估計工時</th>
+                                        <th>日均工時</th>
+                                        <th>狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+                
+                // 按議題編號排序
+                user.issues.sort((a, b) => parseInt(a.issueId) - parseInt(b.issueId));
+                
+                user.issues.forEach(issue => {
+                    const statusClass = issue.isClosed ? 'badge-closed' : 'badge-open';
+                    accordionHTML += `
+                        <tr>
+                            <td>#${issue.issueId}</td>
+                            <td>${issue.projectName}</td>
+                            <td class="issue-subject">${issue.issueSubject}</td>
+                            <td>${issue.startDate}</td>
+                            <td>${issue.dueDate}</td>
+                            <td>${issue.estimatedHours} hrs</td>
+                            <td>${issue.avgHoursPerDay} hrs</td>
+                            <td><span class="badge ${statusClass}">${issue.statusName}</span></td>
+                        </tr>`;
+                });
+                
+                accordionHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            });
+
+            accordion.innerHTML = accordionHTML;
+        }
+
+        // 按專案分組顯示
+        function generateProjectGroups(statistics, accordion) {
+            const projectGroups = {};
+            statistics.workloadList.forEach(item => {
+                if (!projectGroups[item.projectName]) {
+                    projectGroups[item.projectName] = {
+                        issues: [],
+                        totalHours: 0,
+                        totalIssues: 0,
+                        earliestStart: null,
+                        latestEnd: null
+                    };
+                }
+                projectGroups[item.projectName].issues.push(item);
+                projectGroups[item.projectName].totalHours += parseFloat(item.estimatedHours || 0);
+                projectGroups[item.projectName].totalIssues++;
+
+                // 計算最早開始時間和最晚結束時間
+                const startDate = new Date(item.startDate);
+                const endDate = new Date(item.dueDate);
+                
+                if (!projectGroups[item.projectName].earliestStart || startDate < projectGroups[item.projectName].earliestStart) {
+                    projectGroups[item.projectName].earliestStart = startDate;
+                }
+                
+                if (!projectGroups[item.projectName].latestEnd || endDate > projectGroups[item.projectName].latestEnd) {
+                    projectGroups[item.projectName].latestEnd = endDate;
+                }
+            });
+
+            // 生成專案 HTML
+            let accordionHTML = '';
+            Object.keys(projectGroups).forEach((projectName, index) => {
+                const project = projectGroups[projectName];
+                
+                // 格式化日期顯示
+                const startDateStr = project.earliestStart ? project.earliestStart.toLocaleDateString('zh-TW') : '未設定';
+                const endDateStr = project.latestEnd ? project.latestEnd.toLocaleDateString('zh-TW') : '未設定';
+                
+                accordionHTML += `
+                    <div class="project-item">
+                        <div class="project-header" onclick="toggleProject(${index})">
+                            <div class="project-title-section">
+                                <h3 class="project-title">📁 ${projectName}</h3>
+                                <div class="project-duration">
+                                    <span class="duration-text">📅 ${startDateStr} ~ ${endDateStr}</span>
+                                </div>
+                            </div>
+                            <div class="project-summary">
+                                <span class="project-cost">💰 ${project.totalHours.toFixed(1)} hrs</span>
+                                <span class="project-count">📋 ${project.totalIssues} 個議題</span>
+                                <span class="expand-icon" id="icon-${index}">▼</span>
+                            </div>
+                        </div>
+                        <div class="project-content" id="content-${index}">
+                            <table class="issues-table">
+                                <thead>
+                                    <tr>
+                                        <th>議題編號</th>
+                                        <th>議題主旨</th>
+                                        <th>開始日期</th>
+                                        <th>結束日期</th>
+                                        <th>估計工時</th>
+                                        <th>日均工時</th>
+                                        <th>狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+                
+                // 按議題編號排序
+                project.issues.sort((a, b) => parseInt(a.issueId) - parseInt(b.issueId));
+                
+                project.issues.forEach(issue => {
+                    const statusClass = issue.isClosed ? 'badge-closed' : 'badge-open';
+                    accordionHTML += `
+                        <tr>
+                            <td>#${issue.issueId}</td>
+                            <td class="issue-subject">${issue.issueSubject}</td>
+                            <td>${issue.startDate}</td>
+                            <td>${issue.dueDate}</td>
+                            <td>${issue.estimatedHours} hrs</td>
+                            <td>${issue.avgHoursPerDay} hrs</td>
+                            <td><span class="badge ${statusClass}">${issue.statusName}</span></td>
+                        </tr>`;
+                });
+                
+                accordionHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            });
+
+            accordion.innerHTML = accordionHTML;
+        }
+
+        // 切換專案展開/收合
+        function toggleProject(index) {
+            const content = document.getElementById(`content-${index}`);
+            const icon = document.getElementById(`icon-${index}`);
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                icon.classList.remove('expanded');
+                icon.textContent = '▼';
+            } else {
+                content.classList.add('expanded');
+                icon.classList.add('expanded');
+                icon.textContent = '▲';
+            }
+        }
+
+        // 2D分析提交函數
+        function submit2DAnalysis() {
+            const form = document.getElementById('workloadForm');
+            const groupName = document.getElementById('groupName').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            // 驗證必填欄位
+            if (!groupName || !startDate || !endDate) {
+                alert('請填寫所有必填欄位！');
+                return;
+            }
+
+            // 驗證日期範圍
+            if (new Date(startDate) > new Date(endDate)) {
+                alert('開始日期不能晚於結束日期！');
+                return;
+            }
+
+            // 創建新的表單並提交到2D分析頁面
+            const form2D = document.createElement('form');
+            form2D.method = 'POST';
+            form2D.action = '/workload2d';
+
+            // 複製表單數據
+            const formData = new FormData(form);
+            for (let [key, value] of formData.entries()) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form2D.appendChild(input);
+            }
+
+            document.body.appendChild(form2D);
+            form2D.submit();
+        }
+    </script>
+</body>
+</html>

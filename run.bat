@@ -1,0 +1,3 @@
+@echo off
+echo Starting Workload Application with Gradle...
+call gradlew.bat bootRun --console=plain
