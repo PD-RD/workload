@@ -95,14 +95,41 @@ public class WorkloadController {
         return "index";
     }
 
+    @GetMapping("/workload2d")
+    public String getWorkload2DPage(Model model) {
+        // 提供初始空白頁面，包含篩選表單
+        List<String> groups = workloadService.getAllGroups();
+        model.addAttribute("groups", groups);
+        
+        // 設定預設日期
+        LocalDate today = LocalDate.now();
+        LocalDate endOfYear = LocalDate.of(today.getYear(), 12, 31);
+        
+        model.addAttribute("defaultStartDate", today.toString());
+        model.addAttribute("defaultEndDate", endOfYear.toString());
+        model.addAttribute("selectedStartDate", today.toString());
+        model.addAttribute("selectedEndDate", endOfYear.toString());
+        
+        // 初始狀態：沒有分析數據
+        model.addAttribute("analysis2D", null);
+        model.addAttribute("selectedGroup", "");
+        model.addAttribute("selectedUsers", new ArrayList<>());
+        model.addAttribute("users", new ArrayList<>());
+        model.addAttribute("timeGranularity", "daily");
+        
+        return "workload2d";
+    }
+
     @PostMapping("/workload2d")
     public String getWorkload2D(
             @RequestParam("groupName") String groupName,
             @RequestParam(value = "userFullname", required = false) String[] userFullnames,
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(value = "timeGranularity", defaultValue = "daily") String timeGranularity,
             Model model) {
+        
+        // 時間顆粒度固定為每日
+        String timeGranularity = "daily";
         
         System.out.println("========================================");
         System.out.println("POST /workload2d - Request Parameters:");
@@ -110,7 +137,7 @@ public class WorkloadController {
         System.out.println("User Fullnames: " + (userFullnames != null ? Arrays.toString(userFullnames) : "[]"));
         System.out.println("Start Date: " + startDate);
         System.out.println("End Date: " + endDate);
-        System.out.println("Time Granularity: " + timeGranularity);
+        System.out.println("Time Granularity: " + timeGranularity + " (固定值)");
         
         // 處理空的使用者選擇
         List<String> selectedUsers = new ArrayList<>();

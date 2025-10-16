@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redmine 工作負載 2D 分析</title>
+    <!-- Chart.js 圖表庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -172,24 +174,48 @@
             min-width: 40px;
             max-width: 40px;
             font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+        
+        /* 單元格更新動畫效果 */
+        .cell-updated {
+            background-color: #cce5ff !important;
+            animation: cellFlash 0.3s ease;
+        }
+        
+        @keyframes cellFlash {
+            0% {
+                background-color: #007bff;
+                transform: scale(1.05);
+            }
+            100% {
+                background-color: #cce5ff;
+                transform: scale(1);
+            }
         }
 
         /* 工作量數值的顏色編碼 */
         .workload-zero {
-            background-color: #f8f9fa;
+            background-color: #ffffff;
             color: #6c757d;
         }
 
         .workload-normal {
             background-color: #d4edda;
             color: #155724;
+            font-weight: 600;
+        }
+
+        .workload-medium {
+            background-color: #fff3cd;
+            color: #856404;
+            font-weight: bold;
         }
 
         .workload-high {
-            background-color: #ffeaa7;
-            color: #d63031;
+            background-color: #f8d7da;
+            color: #721c24;
             font-weight: bold;
-            border: 2px solid #fdcb6e;
         }
 
         .workload-overdue {
@@ -266,6 +292,96 @@
             opacity: 0.9;
         }
 
+        /* Loading 動畫樣式 */
+        .loading-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(0, 0, 0, 0.8) !important;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999 !important;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+
+        .loading-content {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 300px;
+            width: 90%;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .loading-subtext {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        /* 進度條動畫 */
+        .loading-progress {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+            animation: progress 2s ease-in-out infinite;
+        }
+
+        @keyframes progress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+
+        /* 小型 Loading 指示器（用於局部更新） */
+        .mini-loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
         /* 響應式設計 */
         @media (max-width: 768px) {
             .container {
@@ -305,6 +421,135 @@
             }
         }
 
+        /* 篩選區域樣式 */
+        .filter-section {
+            padding: 25px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .filter-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+            font-size: 0.95em;
+        }
+
+        .form-group select,
+        .form-group input[type="date"] {
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .form-group select[multiple] {
+            padding: 8px;
+            min-height: 100px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .form-group select[multiple] option {
+            padding: 6px 10px;
+            margin: 1px 0;
+            border-radius: 4px;
+        }
+
+        .form-group select[multiple] option:hover {
+            background-color: #f8f9fa;
+        }
+
+        .form-group select[multiple] option:checked {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .form-group select:focus,
+        .form-group input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-text {
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .btn-search,
+        .btn-reset {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 120px;
+        }
+
+        .btn-search {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-reset:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .filter-section {
+                padding: 20px 15px;
+            }
+            
+            .filter-form {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .btn-group {
+                grid-column: 1;
+                justify-content: center;
+            }
+        }
+
         /* Loading 覆蓋層樣式 */
         .loading-overlay {
             position: fixed;
@@ -313,11 +558,17 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            display: none;
+            display: flex; /* 默認顯示，之後通過 JavaScript 控制 */
             z-index: 9999;
             justify-content: center;
             align-items: center;
             backdrop-filter: blur(3px);
+        }
+
+        /* 當沒有數據時隱藏 Loading */
+        .no-data ~ .loading-overlay,
+        .loading-overlay.hidden {
+            display: none;
         }
 
         .loading-spinner {
@@ -461,26 +712,210 @@
         .level-0 { padding-left: 10px !important; }
         .level-1 { padding-left: 30px !important; }
         .level-2 { padding-left: 50px !important; }
+
+        /* 圖表區域樣式 */
+        .charts-container {
+            margin: 40px 0;
+            padding: 0 30px 30px;
+            background: white;
+        }
+
+        .charts-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 0;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .charts-header h2 {
+            font-size: 2.2em;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .charts-header p {
+            font-size: 1.1em;
+            color: #666;
+            font-weight: 400;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .chart-item {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            border: 1px solid #e0e6ed;
+            transition: all 0.3s ease;
+        }
+
+        .chart-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.15);
+        }
+
+        .chart-full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-title {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .chart-title h3 {
+            font-size: 1.4em;
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .chart-title p {
+            font-size: 0.95em;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+            margin: 0 auto;
+        }
+
+        .chart-full-width .chart-wrapper {
+            height: 400px;
+        }
+
+        .chart-wrapper canvas {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* 響應式設計 */
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
+            
+            .chart-full-width {
+                grid-column: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .charts-container {
+                padding: 0 15px 20px;
+                margin: 20px 0;
+            }
+            
+            .charts-header {
+                padding: 20px 0;
+                margin-bottom: 25px;
+            }
+            
+            .charts-header h2 {
+                font-size: 1.8em;
+            }
+            
+            .chart-item {
+                padding: 20px;
+            }
+            
+            .chart-wrapper {
+                height: 250px;
+            }
+            
+            .chart-full-width .chart-wrapper {
+                height: 300px;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- 工作負載分析設定（隱藏的配置區域） -->
+    <div id="workloadSettings" style="display: none;">
+        <!-- Loading 顯示設定：false = 預設不顯示 Loading 畫面 -->
+        <input type="checkbox" id="enableLoadingOverlay" data-setting="enableLoadingOverlay">
+        
+        <!-- 其他設定可在此擴展 -->
+        <input type="checkbox" id="enableDebugMode" data-setting="enableDebugMode">
+        <input type="checkbox" id="enableProgressBar" data-setting="enableProgressBar" checked>
+    </div>
+
     <!-- Loading 覆蓋層 -->
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
             <div class="loading-text" id="loadingText">計算中...</div>
-            <div class="loading-subtext" id="loadingSubtext">正在更新工作量資料</div>
-            <div class="progress-container">
-                <div class="progress-bar" id="progressBar"></div>
+            <div class="loading-subtext" id="loadingSubtext">正在重新計算成本與工時統計</div>
+            <div class="loading-progress">
+                <div class="loading-progress-bar" id="progressBar"></div>
             </div>
         </div>
     </div>
 
     <div class="container">
         <div class="header">
-            <a href="/" class="back-btn">← 返回首頁</a>
             <h1>Redmine 工作負載 2D 分析</h1>
             <p>議題工作量日期分佈視覺化分析</p>
+        </div>
+
+        <!-- 篩選條件區域 -->
+        <div class="filter-section">
+            <form id="workload2dForm" action="/workload2d" method="post" class="filter-form">
+                <div class="form-group">
+                    <label for="groupName">部門群組</label>
+                    <select id="groupName" name="groupName" required onchange="loadUsers()">
+                        <option value="">請選擇部門</option>
+                        <option th:each="group : ${groups}" 
+                                th:value="${group}" 
+                                th:text="${group}"
+                                th:selected="${group == selectedGroup}"></option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="userFullname">使用者 (可多選)</label>
+                    <select id="userFullname" name="userFullname" multiple size="4">
+                        <option value="">🏢 全部成員 (整個部門)</option>
+                        <!-- 動態載入的使用者選項會在這裡插入 -->
+                        <th:block th:if="${users != null}">
+                            <option th:each="user : ${users}" 
+                                    th:value="${user}" 
+                                    th:text="${user}"
+                                    th:selected="${selectedUsers != null and selectedUsers.contains(user)}"></option>
+                        </th:block>
+                    </select>
+                    <small class="form-text">按住 Ctrl 或 Cmd 可多選使用者</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="startDate">開始日期</label>
+                    <input type="date" id="startDate" name="startDate" 
+                           th:value="${selectedStartDate != null ? selectedStartDate : defaultStartDate}" 
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="endDate">結束日期</label>
+                    <input type="date" id="endDate" name="endDate" 
+                           th:value="${selectedEndDate != null ? selectedEndDate : defaultEndDate}" 
+                           required>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn-search">🔍 重新分析</button>
+                    <button type="button" class="btn-reset" onclick="resetForm()">🔄 重置</button>
+                </div>
+            </form>
         </div>
 
         <div class="info-section">
@@ -502,7 +937,7 @@
                 </div>
                 <div class="info-item">
                     <label>時間顆粒度：</label>
-                    <span th:text="${timeGranularity == 'daily' ? '📅 每日' : (timeGranularity == 'weekly' ? '📊 每週' : '📈 每月')}"></span>
+                    <span>📅 每日</span>
                 </div>
                 <div class="info-item">
                     <label>議題數量：</label>
@@ -512,6 +947,23 @@
         </div>
 
         <div class="analysis-section">
+            <!-- 無數據提示 -->
+            <div th:if="${analysis2D == null or analysis2D.isEmpty()}" class="no-data">
+                <div style="text-align: center; padding: 60px 20px; background: #f8f9fa; border-radius: 15px; margin: 20px 0;">
+                    <div style="font-size: 4em; margin-bottom: 20px; color: #dee2e6;">📊</div>
+                    <h3 style="color: #6c757d; margin-bottom: 15px; font-size: 1.5em;">尚無分析數據</h3>
+                    <p style="color: #6c757d; font-size: 1.1em; margin-bottom: 25px;">請在上方選擇部門群組、使用者及日期範圍，然後點擊「🔍 重新分析」來開始分析</p>
+                    <div style="background: white; padding: 20px; border-radius: 10px; border: 2px dashed #dee2e6; max-width: 500px; margin: 0 auto;">
+                        <h4 style="color: #495057; margin-bottom: 10px;">💡 操作提示</h4>
+                        <ul style="text-align: left; color: #6c757d; line-height: 1.6;">
+                            <li>選擇部門群組後會自動載入該部門的使用者列表</li>
+                            <li>可以選擇特定使用者或保持「全部成員」</li>
+                            <li>建議日期範圍不要超過3個月以確保分析效能</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <!-- 成本計算統計 -->
             <div class="cost-summary" th:if="${analysis2D != null and !analysis2D.isEmpty()}">
                 <div class="cost-item">
@@ -648,7 +1100,7 @@
                                         <div class="issue-details">
                                             <span th:text="'期間: ' + ${#temporals.format(item.startDate, 'yyyy-MM-dd')} + ' ~ ' + ${#temporals.format(item.dueDate, 'yyyy-MM-dd')}"></span><br/>
                                             <span th:text="'預估: ' + ${item.estimatedHours} + ' 小時'"></span><br/>
-                                            <span id="'period-hours-' + ${item.issueId}" class="period-hours">區間: 計算中...</span>
+                                            <span th:id="'period-hours-' + ${item.issueId}" class="period-hours">區間: 計算中...</span>
                                         </div>
                                     </div>
                                 </td>
@@ -667,7 +1119,8 @@
                                     th:class="${'workload-cell ' + (day.weekend ? 'weekend' : 
                                                (day.status == '0.0' ? 'workload-zero' : 
                                                (day.overdue ? 'workload-overdue' : 
-                                               (T(java.lang.Double).parseDouble(day.status) >= 8.0 ? 'workload-high' : 'workload-normal'))))}">
+                                               (T(java.lang.Double).parseDouble(day.status) >= 8.0 ? 'workload-high' : 
+                                               (T(java.lang.Double).parseDouble(day.status) > 5.0 ? 'workload-medium' : 'workload-normal')))))}">
                                 </td>
                                 
                                 <!-- 每週/每月模式：顯示週期工作量 -->
@@ -681,7 +1134,8 @@
                                              data-original-workload=${period.status}"
                                     th:class="${'workload-cell ' + 
                                                (period.status == '0.0' ? 'workload-zero' : 
-                                               (T(java.lang.Double).parseDouble(period.status) >= 8.0 ? 'workload-high' : 'workload-normal'))}">
+                                               (T(java.lang.Double).parseDouble(period.status) >= 8.0 ? 'workload-high' : 
+                                               (T(java.lang.Double).parseDouble(period.status) > 5.0 ? 'workload-medium' : 'workload-normal')))}">
                                 </td>
                             </tr>
                         </tbody>
@@ -696,15 +1150,204 @@
         </div>
     </div>
 
+    <!-- 人力分析圖表區域 -->
+    <div th:if="${analysis2D != null and !analysis2D.isEmpty()}" class="charts-container">
+        <div class="charts-header">
+            <h2>📊 人力分析圖表</h2>
+            <p>基於 2D 工作負載矩陣數據的視覺化分析</p>
+        </div>
+        
+        <div class="charts-grid">
+            <!-- 人員工時分佈圓餅圖 -->
+            <div class="chart-item">
+                <div class="chart-title">
+                    <h3>👥 人員工時分佈</h3>
+                    <p>顯示各人員在選定期間的工時佔比</p>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="userHoursChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 專案工時分佈長條圖 -->
+            <div class="chart-item">
+                <div class="chart-title">
+                    <h3>📋 專案工時分佈</h3>
+                    <p>顯示各專案的總工時與分佈情況</p>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="projectHoursChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 工時趨勢折線圖 -->
+            <div class="chart-item chart-full-width">
+                <div class="chart-title">
+                    <h3>📈 工時趨勢分析</h3>
+                    <p>顯示選定期間內各人員的工時變化趨勢</p>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="workloadTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 工作負載熱力圖 -->
+            <div class="chart-item chart-full-width">
+                <div class="chart-title">
+                    <h3>🔥 工作負載熱力圖</h3>
+                    <p>以熱力圖方式展示各人員在不同時間點的工作負載強度</p>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="workloadHeatmapChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // 動態調整表格樣式
-        document.addEventListener('DOMContentLoaded', function() {
+        // 全域 Loading 使用者輪播計時器 (避免多次重進函數造成無法清除)
+        window.__WL_ROTATE_TIMER = null;
+        window.__WL_FORCE_HIDE_TIMER = null;
+        // 統一的頁面初始化函數
+        function initializePage() {
+            try {
+                console.log('開始統一頁面初始化...');
+                
+                // 1. 載入設定
+                loadConfigFromHTML();
+                
+                // 2. 注入切換器
+                injectLoadingToggle();
+                
+                // 3. 初始化表格樣式
+                initializeTableStyling();
+                
+                // 4. 初始化主要功能（如果有數據）
+                initializeMainFeatures();
+                
+                console.log('統一頁面初始化完成');
+            } catch (error) {
+                console.error('頁面初始化發生錯誤:', error);
+            }
+        }
+
+        // 表格樣式初始化
+        function initializeTableStyling() {
             const table = document.querySelector('.workload-table');
             if (table) {
                 // 為表格添加滾動提示
                 const container = table.closest('.table-container');
-                if (container.scrollWidth > container.clientWidth) {
+                if (container && container.scrollWidth > container.clientWidth) {
                     container.style.border = '2px solid #667eea';
+                    container.style.borderRadius = '8px';
+                    container.title = '此表格支援橫向滾動';
+                }
+            }
+        }
+
+        // 主要功能初始化
+        function initializeMainFeatures() {
+            // 檢查是否有 2D 分析數據
+            const hasData = document.querySelector('tbody tr[data-level="0"]');
+            
+            if (!hasData) {
+                console.log('沒有數據，跳過主要功能初始化');
+                return;
+            }
+            
+            console.log('檢測到數據，開始主要功能初始化...');
+            
+            // 簡單延遲確保 DOM 完全準備好
+            setTimeout(async function() {
+                try {
+                    console.log('開始初始化 2D 分析系統...');
+                    // 顯示初始化 LOADING（依 HTML 設定決定）
+                    showLoading('初始化中...', '正在重新計算成本與工時統計');
+                    // 建立全域快取 (初次)
+                    await buildWorkloadCache();
+                    
+                    // 設置 DOM 變化監聽器，監控新增的 issue-title
+                    setupDOMChangeObserver();
+                    
+                    // 更新進度到 20%
+                    try {
+                        updateProgress(20);
+                    } catch (progressError) {
+                        console.warn('更新進度失敗:', progressError);
+                    }
+                    
+                    // 計算區間工時
+                    console.log('計算區間工時...');
+                    await calculatePeriodHoursAsync();
+                    // 計算完成後刷新快取內的 periodHours
+                    refreshIssuePeriodHours();
+                    try {
+                        updateProgress(40);
+                    } catch (progressError) {
+                        console.warn('更新進度失敗:', progressError);
+                    }
+                    
+                    // 初始化成本計算
+                    console.log('初始化成本計算...');
+                    initializeCostCalculation();
+                    try {
+                        updateProgress(60);
+                    } catch (progressError) {
+                        console.warn('更新進度失敗:', progressError);
+                    }
+                    
+                    // 初始化圖表（等待完成）
+                    console.log('初始化圖表...');
+                    await initializeCharts();
+                    try {
+                        updateProgress(80);
+                    } catch (progressError) {
+                        console.warn('更新進度失敗:', progressError);
+                    }
+                    
+                    // 最終更新
+                    try {
+                        updateProgress(100);
+                    } catch (progressError) {
+                        console.warn('更新進度失敗:', progressError);
+                    }
+                    
+                    console.log('2D 分析系統初始化完成（TABLE + CHART 全部完成）');
+                    
+                } catch (error) {
+                    console.error('初始化過程中發生錯誤:', error);
+                } finally {
+                    // 延遲隱藏 Loading，確保用戶看到 100% 完成且所有圖表都已渲染
+                    setTimeout(() => {
+                        try {
+                            hideLoading();
+                            console.log('Loading 隱藏，初始化流程完成（TABLE + CHART）');
+                        } catch (hideError) {
+                            console.warn('隱藏 Loading 時發生錯誤:', hideError);
+                        }
+                    }, 500);
+                }
+            }, 200);
+        }
+
+        // 這個監聽器現在只是為了向後兼容，實際功能已轉移到統一初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('舊版 DOMContentLoaded 監聽器（已棄用，功能轉移到統一初始化）');
+            
+            // 只在有數據時執行
+            const hasData = document.querySelector('tbody tr[data-level="0"]');
+            if (!hasData) {
+                console.log('無數據，跳過舊版初始化');
+                return;
+            }
+            
+            // 保留表格滾動提示功能
+            const table = document.querySelector('.workload-table');
+            if (table) {
+                const container = table.closest('.table-container');
+                if (container && container.scrollWidth > container.clientWidth) {
+                    container.style.border = '2px solid #667eea';
+                    container.style.borderRadius = '8px';
                     container.title = '表格可左右滾動查看更多內容';
                 }
             }
@@ -715,13 +1358,24 @@
 
         // 初始化展開狀態：預設只顯示使用者總計
         function initializeExpandState() {
-            const allRows = document.querySelectorAll('tbody tr');
-            allRows.forEach(row => {
-                const level = row.getAttribute('data-level');
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.issues) {
+                console.warn('[initializeExpandState] 快取未就緒，無法初始化展開狀態');
+                return;
+            }
+            
+            // 使用快取的 issues 陣列
+            cache.issues.forEach(issue => {
+                if (!issue.row) return;
+                const level = issue.row.getAttribute('data-level');
                 if (level === '1' || level === '2') {
-                    row.classList.add('collapsed');
+                    issue.row.classList.add('collapsed');
                 }
             });
+            
+            if (cache.DEBUG) {
+                console.log('[initializeExpandState] 已初始化展開狀態');
+            }
         }
 
         // 切換展開/收合狀態
@@ -751,20 +1405,29 @@
         // 切換使用者下的專案顯示
         function toggleUserProjects(userRow, expand) {
             const userName = userRow.getAttribute('data-user');
-            const allRows = document.querySelectorAll('tbody tr');
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users || !cache.users[userName]) {
+                console.warn('[toggleUserProjects] 快取未就緒或找不到使用者:', userName);
+                return;
+            }
             
-            allRows.forEach(row => {
-                const rowUser = row.getAttribute('data-user');
+            const userData = cache.users[userName];
+            
+            // 遍歷該使用者的所有專案
+            Object.keys(userData.projects).forEach(projectName => {
+                const projectData = userData.projects[projectName];
+                if (!projectData.row) return;
+                
+                const row = projectData.row;
                 const rowLevel = row.getAttribute('data-level');
                 
-                if (rowUser === userName && rowLevel === '1') {
+                if (rowLevel === '1') {
                     // 專案行
                     if (expand) {
                         row.classList.remove('collapsed');
                     } else {
                         row.classList.add('collapsed');
                         // 同時收合該專案下的議題
-                        const projectName = row.getAttribute('data-project');
                         hideProjectIssues(userName, projectName);
                         // 重置專案的展開圖示
                         const projectIcon = row.querySelector('.expand-icon');
@@ -781,18 +1444,27 @@
         function toggleProjectIssues(projectRow, expand) {
             const userName = projectRow.getAttribute('data-user');
             const projectName = projectRow.getAttribute('data-project');
-            const allRows = document.querySelectorAll('tbody tr');
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users || !cache.users[userName]) {
+                console.warn('[toggleProjectIssues] 快取未就緒或找不到使用者:', userName);
+                return;
+            }
             
-            allRows.forEach(row => {
-                const rowUser = row.getAttribute('data-user');
-                const rowProject = row.getAttribute('data-project');
-                const rowLevel = row.getAttribute('data-level');
-                
-                if (rowUser === userName && rowProject === projectName && rowLevel === '2') {
+            const userData = cache.users[userName];
+            if (!userData.projects || !userData.projects[projectName]) {
+                console.warn('[toggleProjectIssues] 找不到專案:', userName, projectName);
+                return;
+            }
+            
+            const projectData = userData.projects[projectName];
+            
+            // 遍歷該專案下的所有議題
+            projectData.issues.forEach(issueObj => {
+                if (issueObj && issueObj.row) {
                     if (expand) {
-                        row.classList.remove('collapsed');
+                        issueObj.row.classList.remove('collapsed');
                     } else {
-                        row.classList.add('collapsed');
+                        issueObj.row.classList.add('collapsed');
                     }
                 }
             });
@@ -800,298 +1472,283 @@
 
         // 隱藏專案下的所有議題
         function hideProjectIssues(userName, projectName) {
-            const allRows = document.querySelectorAll('tbody tr');
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users || !cache.users[userName]) {
+                console.warn('[hideProjectIssues] 快取未就緒或找不到使用者:', userName);
+                return;
+            }
             
-            allRows.forEach(row => {
-                const rowUser = row.getAttribute('data-user');
-                const rowProject = row.getAttribute('data-project');
-                const rowLevel = row.getAttribute('data-level');
-                
-                if (rowUser === userName && rowProject === projectName && rowLevel === '2') {
-                    row.classList.add('collapsed');
+            const userData = cache.users[userName];
+            if (!userData.projects || !userData.projects[projectName]) {
+                console.warn('[hideProjectIssues] 找不到專案:', userName, projectName);
+                return;
+            }
+            
+            const projectData = userData.projects[projectName];
+            
+            // 遍歷該專案下的所有議題
+            projectData.issues.forEach(issueObj => {
+                if (issueObj && issueObj.row) {
+                    issueObj.row.classList.add('collapsed');
                 }
             });
         }
 
         // === Loading 管理功能 ===
         
-        function showLoading(text = '計算中...', subtext = '正在更新工作量資料') {
-            const overlay = document.getElementById('loadingOverlay');
-            const textElement = document.getElementById('loadingText');
-            const subtextElement = document.getElementById('loadingSubtext');
-            const progressBar = document.getElementById('progressBar');
-            
-            textElement.textContent = text;
-            subtextElement.textContent = subtext;
-            progressBar.style.width = '0%';
-            
-            overlay.style.display = 'flex';
-            
-            // 禁用所有 checkbox
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach(cb => cb.classList.add('calculating'));
-        }
-        
-        function hideLoading() {
-            const overlay = document.getElementById('loadingOverlay');
-            overlay.style.display = 'none';
-            
-            // 重新啟用所有 checkbox
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach(cb => cb.classList.remove('calculating'));
-        }
-        
         function updateProgress(percentage) {
             const progressBar = document.getElementById('progressBar');
-            progressBar.style.width = percentage + '%';
+            if (progressBar) {
+                progressBar.style.width = percentage + '%';
+            } else {
+                // 如果找不到進度條，記錄調試訊息
+                const cache = window.__WL_CACHE__;
+                if (cache && cache.DEBUG) {
+                    console.warn('[Progress] 找不到進度條元素 #progressBar');
+                }
+            }
         }
 
         // === 成本計算功能 ===
         
-        // 切換單個項目的成本計算 - 階層式勾選邏輯（異步版本）
-        async function toggleCostCalculation(checkbox) {
-            console.log('=== toggleCostCalculation 被調用 ===');
-            
+        // 切換單個項目的成本計算 - 階層式勾選邏輯（優化版：快速回應+排程重算）
+        function toggleCostCalculation(checkbox) {
             const issueId = checkbox.getAttribute('data-issue');
             const userName = checkbox.getAttribute('data-user');
             const projectName = checkbox.getAttribute('data-project');
             const isChecked = checkbox.checked;
             
-            console.log('項目資訊:', { issueId, userName, projectName, isChecked });
+            const cache = window.__WL_CACHE__;
+            if (cache && cache.DEBUG) console.log('[Toggle]', { issueId, userName, projectName, isChecked });
             
-            // 顯示 Loading
-            showLoading('更新中...', '正在重新計算工作量');
+            // 立即顯示 Loading（提供即時反饋）
+            showLoading('更新中...', '正在重新計算成本與每日工時');
             
-            try {
-                // 使用 setTimeout 讓 UI 有時間更新
-                await new Promise(resolve => setTimeout(resolve, 50));
-                
-                updateProgress(20);
-                
-                // 根據項目類型處理階層式勾選
+            // 使用 setTimeout 確保處理順序正確
+            setTimeout(() => {
+                // 立即同步更新視覺樣式（無延遲，使用者體驗更好）
                 if (issueId === '-1') {
-                    // 人員層級：取消勾選該人員下的所有專案和 ISSUE
-                    await handleUserLevelToggleAsync(userName, isChecked);
+                    // 人員層級：批量更新該人員下所有專案和 ISSUE（同步）
+                    if (cache && cache.DEBUG) console.log('處理人員層級勾選:', userName, isChecked);
+                    handleUserLevelToggleSync(userName, isChecked);
                 } else if (issueId === '-2') {
-                    // 專案層級：取消勾選該專案下的所有 ISSUE
-                    await handleProjectLevelToggleAsync(userName, projectName, isChecked);
+                    // 專案層級：批量更新該專案下所有 ISSUE（同步）
+                    if (cache && cache.DEBUG) console.log('處理專案層級勾選:', userName, projectName, isChecked);
+                    handleProjectLevelToggleSync(userName, projectName, isChecked);
                 } else {
-                    // ISSUE 層級：更新單個 ISSUE 的視覺樣式，並更新父層狀態
+                    // ISSUE 層級：更新單個 ISSUE 視覺樣式，並更新父層狀態
+                    if (cache && cache.DEBUG) console.log('處理 ISSUE 層級勾選:', issueId, isChecked);
                     toggleRowCostExclusion(checkbox);
-                    
-                    // 更新專案層級的狀態
                     updateProjectCheckboxState(userName, projectName);
-                    
-                    // 更新人員層級的狀態
                     updateParentCheckboxState(userName);
                 }
                 
-                updateProgress(50);
-                
-                // 分步執行重新計算
-                await updateCostStatisticsAsync();
-                updateProgress(70);
-                
-                await updateSummaryRowsHoursAsync();
-                updateProgress(90);
-                
-                // 更新全選狀態
+                // 更新全選狀態（輕量級）
                 updateSelectAllState();
-                updateProgress(100);
                 
-                console.log('=== toggleCostCalculation 完成 ===');
-                
-            } catch (error) {
-                console.error('計算過程中發生錯誤:', error);
-            } finally {
-                // 延遲一點再隱藏 Loading，讓用戶看到 100% 完成
-                setTimeout(() => {
-                    hideLoading();
-                }, 200);
-            }
+                // 排程異步重算（去抖動，避免頻繁計算）
+                if (cache && cache.DEBUG) console.log('排程成本重算...');
+                scheduleCostAndSummaryRecalc('toggle');
+            }, 50); // 短暫延遲確保 Loading 顯示
         }
 
-        // 處理人員層級的勾選/取消勾選（異步版本）
+        // 處理人員層級的勾選/取消勾選（異步版本 - 使用內存模型）
         async function handleUserLevelToggleAsync(userName, isChecked) {
             console.log(`處理人員層級: ${userName}, 勾選=${isChecked}`);
             
-            let updatedCount = 0;
-            const batchSize = 50; // 每批處理的項目數量
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users[userName]) {
+                console.warn('Cache 未初始化或找不到使用者:', userName);
+                return;
+            }
             
-            // 找到該人員的 checkbox 並更新視覺樣式
-            const userCheckbox = document.querySelector(`input[data-user="${userName}"][data-issue="-1"]`);
-            if (userCheckbox) {
-                toggleRowCostExclusion(userCheckbox);
+            let updatedCount = 0;
+            const userObj = cache.users[userName];
+            
+            // 更新人員層級 checkbox
+            if (userObj.checkbox) {
+                userObj.checkbox.checked = isChecked;
+                toggleRowCostExclusion(userObj.checkbox);
                 updatedCount++;
             }
             
-            // 找到該人員下的所有專案 checkbox
-            const projectCheckboxes = document.querySelectorAll(`input[data-user="${userName}"][data-issue="-2"]`);
-            
-            for (let i = 0; i < projectCheckboxes.length; i++) {
-                const projectCheckbox = projectCheckboxes[i];
+            // 遍歷該人員的所有專案（使用內存模型）
+            for (const projectName of userObj.projects) {
+                const projectKey = `${userName}|${projectName}`;
+                const projectObj = cache.projects[projectKey];
                 
-                if (projectCheckbox.checked !== isChecked) {
-                    projectCheckbox.checked = isChecked;
-                    toggleRowCostExclusion(projectCheckbox);
-                    updatedCount++;
-                }
-                
-                // 同時更新該專案下的所有 ISSUE
-                const projectName = projectCheckbox.getAttribute('data-project');
-                const issueCheckboxes = document.querySelectorAll(
-                    `input[data-user="${userName}"][data-project="${projectName}"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])`
-                );
-                
-                for (let j = 0; j < issueCheckboxes.length; j++) {
-                    const issueCheckbox = issueCheckboxes[j];
-                    if (issueCheckbox.checked !== isChecked) {
-                        issueCheckbox.checked = isChecked;
-                        toggleRowCostExclusion(issueCheckbox);
+                if (projectObj && projectObj.checkbox) {
+                    if (projectObj.checkbox.checked !== isChecked) {
+                        projectObj.checkbox.checked = isChecked;
+                        toggleRowCostExclusion(projectObj.checkbox);
                         updatedCount++;
                     }
                     
-                    // 每處理一批項目就暫停一下，讓 UI 有機會更新
-                    if (updatedCount % batchSize === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                    // 更新該專案下的所有 ISSUE（使用內存模型）
+                    for (const issueObj of projectObj.issues) {
+                        if (issueObj.checkbox && issueObj.checkbox.checked !== isChecked) {
+                            issueObj.checkbox.checked = isChecked;
+                            toggleRowCostExclusion(issueObj.checkbox);
+                            updatedCount++;
+                        }
                     }
                 }
             }
             
-            console.log(`人員 ${userName} 的所有項目已更新為: ${isChecked}, 共更新 ${updatedCount} 個項目`);
+            console.log(`[Cache] 人員 ${userName} 的所有項目已更新為: ${isChecked}, 共更新 ${updatedCount} 個項目`);
         }
 
-        // 處理專案層級的勾選/取消勾選（異步版本）
+        // 處理專案層級的勾選/取消勾選（異步版本 - 使用內存模型）
         async function handleProjectLevelToggleAsync(userName, projectName, isChecked) {
             console.log(`處理專案層級: ${userName}/${projectName}, 勾選=${isChecked}`);
             
-            let updatedCount = 0;
-            const batchSize = 50;
+            const cache = window.__WL_CACHE__;
+            const projectKey = `${userName}|${projectName}`;
             
-            // 找到該專案的 checkbox 並更新視覺樣式
-            const projectCheckbox = document.querySelector(
-                `input[data-user="${userName}"][data-project="${projectName}"][data-issue="-2"]`
-            );
-            if (projectCheckbox) {
-                toggleRowCostExclusion(projectCheckbox);
+            if (!cache || !cache.projects[projectKey]) {
+                console.warn('Cache 未初始化或找不到專案:', projectKey);
+                return;
+            }
+            
+            let updatedCount = 0;
+            const projectObj = cache.projects[projectKey];
+            
+            // 更新專案層級 checkbox
+            if (projectObj.checkbox) {
+                projectObj.checkbox.checked = isChecked;
+                toggleRowCostExclusion(projectObj.checkbox);
                 updatedCount++;
             }
             
-            // 找到該專案下的所有 ISSUE checkbox
-            const issueCheckboxes = document.querySelectorAll(
-                `input[data-user="${userName}"][data-project="${projectName}"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])`
-            );
-            
-            for (let i = 0; i < issueCheckboxes.length; i++) {
-                const issueCheckbox = issueCheckboxes[i];
-                if (issueCheckbox.checked !== isChecked) {
-                    issueCheckbox.checked = isChecked;
-                    toggleRowCostExclusion(issueCheckbox);
+            // 遍歷該專案下的所有 ISSUE（使用內存模型）
+            for (const issueObj of projectObj.issues) {
+                if (issueObj.checkbox && issueObj.checkbox.checked !== isChecked) {
+                    issueObj.checkbox.checked = isChecked;
+                    toggleRowCostExclusion(issueObj.checkbox);
                     updatedCount++;
-                    
-                    // 批次處理
-                    if (updatedCount % batchSize === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 10));
-                    }
                 }
             }
             
-            console.log(`專案 ${userName}/${projectName} 下的所有 ISSUE 已更新為: ${isChecked}, 共更新 ${updatedCount} 個項目`);
+            console.log(`[Cache] 專案 ${userName}/${projectName} 下的所有 ISSUE 已更新為: ${isChecked}, 共更新 ${updatedCount} 個項目`);
             
             // 檢查是否需要更新人員層級的狀態
             updateParentCheckboxState(userName);
         }
 
-        // 處理人員層級的勾選/取消勾選
-        function handleUserLevelToggle(userName, isChecked) {
-            console.log(`處理人員層級: ${userName}, 勾選=${isChecked}`);
+        // 處理人員層級的勾選/取消勾選（同步版本：立即 UI 更新 - 使用內存模型）
+        function handleUserLevelToggleSync(userName, isChecked) {
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users[userName]) {
+                console.warn('Cache 未初始化或找不到使用者:', userName);
+                return;
+            }
             
+            const userObj = cache.users[userName];
             let updatedCount = 0;
             
-            // 找到該人員的 checkbox 並更新視覺樣式
-            const userCheckbox = document.querySelector(`input[data-user="${userName}"][data-issue="-1"]`);
-            if (userCheckbox) {
-                toggleRowCostExclusion(userCheckbox);
+            // 更新人員 checkbox
+            if (userObj.checkbox) {
+                userObj.checkbox.checked = isChecked;
+                toggleRowCostExclusion(userObj.checkbox);
                 updatedCount++;
             }
             
-            // 找到該人員下的所有專案 checkbox
-            const projectCheckboxes = document.querySelectorAll(`input[data-user="${userName}"][data-issue="-2"]`);
-            projectCheckboxes.forEach(projectCheckbox => {
-                if (projectCheckbox.checked !== isChecked) {
-                    projectCheckbox.checked = isChecked;
-                    toggleRowCostExclusion(projectCheckbox);
+            // 遍歷所有專案和 ISSUE（使用內存模型）
+            // 修復：使用 Object.entries() 正確遍歷物件
+            for (const [projectName, projectObj] of Object.entries(userObj.projects)) {
+                // 更新專案 checkbox
+                if (projectObj.checkbox && projectObj.checkbox.checked !== isChecked) {
+                    projectObj.checkbox.checked = isChecked;
+                    toggleRowCostExclusion(projectObj.checkbox);
                     updatedCount++;
                 }
                 
-                // 同時更新該專案下的所有 ISSUE
-                const projectName = projectCheckbox.getAttribute('data-project');
-                const issueCheckboxes = document.querySelectorAll(
-                    `input[data-user="${userName}"][data-project="${projectName}"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])`
-                );
-                issueCheckboxes.forEach(issueCheckbox => {
-                    if (issueCheckbox.checked !== isChecked) {
-                        issueCheckbox.checked = isChecked;
-                        toggleRowCostExclusion(issueCheckbox);
+                // 更新所有 ISSUE checkbox
+                for (const issueObj of projectObj.issues) {
+                    if (issueObj.checkbox && issueObj.checkbox.checked !== isChecked) {
+                        issueObj.checkbox.checked = isChecked;
+                        toggleRowCostExclusion(issueObj.checkbox);
                         updatedCount++;
                     }
-                });
-            });
+                }
+            }
             
-            console.log(`人員 ${userName} 的所有項目已更新為: ${isChecked}, 共更新 ${updatedCount} 個項目`);
+            if (cache.DEBUG) {
+                console.log(`[Cache] 人員 ${userName} 階層勾選: ${isChecked}, 影響 ${updatedCount} 個項目`);
+            }
         }
 
-        // 處理專案層級的勾選/取消勾選
-        function handleProjectLevelToggle(userName, projectName, isChecked) {
-            console.log(`處理專案層級: ${userName}/${projectName}, 勾選=${isChecked}`);
+        // 處理專案層級的勾選/取消勾選（同步版本：立即 UI 更新 - 使用內存模型）
+        function handleProjectLevelToggleSync(userName, projectName, isChecked) {
+            const cache = window.__WL_CACHE__;
+            const projectKey = `${userName}|${projectName}`;
             
+            if (!cache || !cache.projects[projectKey]) {
+                console.warn('Cache 未初始化或找不到專案:', projectKey);
+                return;
+            }
+            
+            const projectObj = cache.projects[projectKey];
             let updatedCount = 0;
             
-            // 找到該專案的 checkbox 並更新視覺樣式
-            const projectCheckbox = document.querySelector(
-                `input[data-user="${userName}"][data-project="${projectName}"][data-issue="-2"]`
-            );
-            if (projectCheckbox) {
-                toggleRowCostExclusion(projectCheckbox);
+            // 更新專案 checkbox
+            if (projectObj.checkbox) {
+                projectObj.checkbox.checked = isChecked;
+                toggleRowCostExclusion(projectObj.checkbox);
                 updatedCount++;
             }
             
-            // 找到該專案下的所有 ISSUE checkbox
-            const issueCheckboxes = document.querySelectorAll(
-                `input[data-user="${userName}"][data-project="${projectName}"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])`
-            );
-            
-            issueCheckboxes.forEach(issueCheckbox => {
-                if (issueCheckbox.checked !== isChecked) {
-                    issueCheckbox.checked = isChecked;
-                    toggleRowCostExclusion(issueCheckbox);
+            // 遍歷該專案下的所有 ISSUE（使用內存模型）
+            for (const issueObj of projectObj.issues) {
+                if (issueObj.checkbox && issueObj.checkbox.checked !== isChecked) {
+                    issueObj.checkbox.checked = isChecked;
+                    toggleRowCostExclusion(issueObj.checkbox);
                     updatedCount++;
                 }
-            });
+            }
             
-            console.log(`專案 ${userName}/${projectName} 下的所有 ISSUE 已更新為: ${isChecked}, 共更新 ${updatedCount} 個項目`);
+            if (cache.DEBUG) {
+                console.log(`[Cache] 專案 ${projectName} 階層勾選: ${isChecked}, 影響 ${updatedCount} 個項目`);
+            }
             
-            // 檢查是否需要更新人員層級的狀態
+            // 更新完專案下的所有 ISSUE 後，檢查並更新人員層級狀態
             updateParentCheckboxState(userName);
         }
+        
+        // 保留舊同步版本作為別名（向後相容）
+        function handleUserLevelToggle(userName, isChecked) { handleUserLevelToggleSync(userName, isChecked); }
+        function handleProjectLevelToggle(userName, projectName, isChecked) { handleProjectLevelToggleSync(userName, projectName, isChecked); }
 
         // 更新專案層級 checkbox 的狀態（當 ISSUE 改變時）
         function updateProjectCheckboxState(userName, projectName) {
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users || !cache.users[userName]) {
+                console.warn('[updateProjectCheckboxState] 快取未就緒或找不到使用者:', userName);
+                return;
+            }
+            
+            const userData = cache.users[userName];
+            if (!userData.projects || !userData.projects[projectName]) {
+                console.warn('[updateProjectCheckboxState] 找不到專案:', userName, projectName);
+                return;
+            }
+            
+            const projectData = userData.projects[projectName];
+            const projectCheckbox = projectData.checkbox;
+            
+            if (!projectCheckbox) {
+                console.warn('[updateProjectCheckboxState] 找不到專案 checkbox:', userName, projectName);
+                return;
+            }
+            
             // 檢查該專案下的所有 ISSUE 狀態
-            const issueCheckboxes = document.querySelectorAll(
-                `input[data-user="${userName}"][data-project="${projectName}"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])`
-            );
-            const projectCheckbox = document.querySelector(
-                `input[data-user="${userName}"][data-project="${projectName}"][data-issue="-2"]`
-            );
-            
-            if (!projectCheckbox || issueCheckboxes.length === 0) return;
-            
             let checkedCount = 0;
-            let totalCount = issueCheckboxes.length;
+            let totalCount = projectData.issues.length;
             
-            issueCheckboxes.forEach(cb => {
-                if (cb.checked) checkedCount++;
+            projectData.issues.forEach(issueObj => {
+                if (issueObj && issueObj.checkbox && issueObj.checkbox.checked) {
+                    checkedCount++;
+                }
             });
             
             console.log(`專案 ${userName}/${projectName}: ${checkedCount}/${totalCount} 個 ISSUE 已勾選`);
@@ -1119,13 +1776,32 @@
 
         // 更新人員層級 checkbox 的狀態（當專案改變時）
         function updateParentCheckboxState(userName) {
-            // 檢查該人員下的所有 ISSUE 狀態（不只是專案）
-            const allIssueCheckboxes = document.querySelectorAll(
-                `input[data-user="${userName}"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])`
-            );
-            const userCheckbox = document.querySelector(`input[data-user="${userName}"][data-issue="-1"]`);
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.users || !cache.users[userName]) {
+                console.warn('[updateParentCheckboxState] 快取未就緒或找不到使用者:', userName);
+                return;
+            }
             
-            if (!userCheckbox || allIssueCheckboxes.length === 0) return;
+            const userData = cache.users[userName];
+            const userCheckbox = userData.checkbox;
+            
+            if (!userCheckbox) {
+                console.warn('[updateParentCheckboxState] 找不到使用者 checkbox:', userName);
+                return;
+            }
+            
+            // 收集該人員下的所有 ISSUE checkbox
+            const allIssueCheckboxes = [];
+            Object.keys(userData.projects).forEach(projectName => {
+                const projectData = userData.projects[projectName];
+                projectData.issues.forEach(issueObj => {
+                    if (issueObj && issueObj.checkbox) {
+                        allIssueCheckboxes.push(issueObj.checkbox);
+                    }
+                });
+            });
+            
+            if (allIssueCheckboxes.length === 0) return;
             
             let checkedCount = 0;
             let totalCount = allIssueCheckboxes.length;
@@ -1172,332 +1848,947 @@
             }
         }
 
-        // 更新成本統計 - 純前端計算（異步版本）
-        async function updateCostStatisticsAsync() {
-            console.log('=== updateCostStatisticsAsync 開始 ===');
+        // === 快取建置與刷新 (補上遺失定義) ===
+        // === 全域設定（從 HTML 元素讀取）===
+        window.__WL_CONFIG__ = window.__WL_CONFIG__ || {};
+        
+        // 從 HTML 設定區域讀取配置
+        function loadConfigFromHTML() {
+            const settingsPanel = document.getElementById('workloadSettings');
+            if (!settingsPanel) {
+                console.warn('[Config] 找不到設定面板，使用預設值');
+                window.__WL_CONFIG__.enableLoadingOverlay = false;
+                return;
+            }
             
-            // 重新掃描所有 checkbox 並計算
-            const allCheckboxes = document.querySelectorAll('tbody input[type="checkbox"]');
-            console.log('找到 checkbox 數量:', allCheckboxes.length);
+            // 讀取 Loading Overlay 設定（預設 false）
+            const loadingCheckbox = document.getElementById('enableLoadingOverlay');
+            window.__WL_CONFIG__.enableLoadingOverlay = loadingCheckbox ? loadingCheckbox.checked : false;
             
-            let includedHours = 0;
-            let excludedHours = 0;
-            let totalHours = 0;
-            let includedItems = 0;
-            let totalItems = 0;
-            const batchSize = 100; // 每批處理的數量
+            // 讀取其他設定
+            const debugCheckbox = document.getElementById('enableDebugMode');
+            window.__WL_CONFIG__.enableDebugMode = debugCheckbox ? debugCheckbox.checked : false;
+            
+            const progressCheckbox = document.getElementById('enableProgressBar');
+            window.__WL_CONFIG__.enableProgressBar = progressCheckbox ? progressCheckbox.checked : true;
+        }
 
-            // 分批處理 checkbox
-            for (let i = 0; i < allCheckboxes.length; i += batchSize) {
-                const endIndex = Math.min(i + batchSize, allCheckboxes.length);
+        function setLoadingOverlayEnabled(enabled) {
+            const loadingCheckbox = document.getElementById('enableLoadingOverlay');
+            if (loadingCheckbox) {
+                loadingCheckbox.checked = !!enabled;
+            }
+            window.__WL_CONFIG__.enableLoadingOverlay = !!enabled;
+            
+            if (!enabled) {
+                // 馬上隱藏並停止相關輪詢 / 計時器
+                hideLoading();
+                if (window.__WL_USER_POLL_TIMER) { clearInterval(window.__WL_USER_POLL_TIMER); window.__WL_USER_POLL_TIMER = null; }
+                if (window.__WL_ROTATE_TIMER) { clearInterval(window.__WL_ROTATE_TIMER); window.__WL_ROTATE_TIMER = null; }
+                if (window.__WL_FORCE_HIDE_TIMER) { clearTimeout(window.__WL_FORCE_HIDE_TIMER); window.__WL_FORCE_HIDE_TIMER = null; }
+            }
+        }
+
+        // 頁面載入時初始化設定（修改為使用統一初始化）
+        (function initConfig() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializePage);
+            } else {
+                // DOM 已載入，直接執行
+                setTimeout(initializePage, 0);
+            }
+        })();
+
+        // 在頁面頂部工具列（若存在）插入一個切換 UI（只插一次）
+        function injectLoadingToggle(){
+            if (document.getElementById('wlLoadingToggle')) return; // 已插入
+            const toolbar = document.querySelector('#topToolbar, .top-toolbar, .toolbar, body');
+            if (!toolbar) return;
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position:fixed;top:6px;right:12px;z-index:2147483647;font-size:12px;background:rgba(0,0,0,0.55);color:#fff;padding:4px 8px;border-radius:6px;backdrop-filter:blur(4px);display:flex;align-items:center;gap:4px;';
+            wrapper.innerHTML = '<label style="cursor:pointer;display:flex;align-items:center;gap:4px;margin:0;"><input id="wlLoadingToggle" type="checkbox" style="margin:0;"><span>顯示 Loading</span></label>';
+            document.body.appendChild(wrapper);
+            const chk = wrapper.querySelector('#wlLoadingToggle');
+            if (chk) {
+                // 同步 HTML 設定到浮動切換器
+                chk.checked = !!window.__WL_CONFIG__.enableLoadingOverlay;
+                chk.addEventListener('change', () => {
+                    setLoadingOverlayEnabled(chk.checked);
+                    // 同步回 HTML 設定區域
+                    loadConfigFromHTML();
+                });
+            } else {
+                console.warn('[LoadingToggle] 無法找到 #wlLoadingToggle 元素');
+            }
+        }
+
+        // Loading 控制函數（受設定控制）
+        function showLoading(text = '計算中...', subtext = '正在重新計算成本與工時統計') {
+            if (!window.__WL_CONFIG__.enableLoadingOverlay) {
+                // 設定為關閉時不顯示
+                return;
+            }
+            console.log('[Loading] 準備顯示 Loading:', text); // 添加調試訊息
+            
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            const loadingSubtext = document.getElementById('loadingSubtext');
+            
+            console.log('[Loading] 元素檢查:', {
+                overlay: !!overlay,
+                loadingText: !!loadingText,
+                loadingSubtext: !!loadingSubtext
+            });
+            
+            if (overlay) {
+                if (loadingText) loadingText.textContent = text;
+                if (loadingSubtext) loadingSubtext.textContent = subtext;
                 
-                for (let j = i; j < endIndex; j++) {
-                    const checkbox = allCheckboxes[j];
-                    const hoursAttr = checkbox.getAttribute('data-hours');
-                    const issueId = checkbox.getAttribute('data-issue');
+                overlay.style.display = 'flex';
+                console.log('[Loading] Loading 樣式已設置為 flex');
+                
+                // 強制重繪
+                overlay.offsetHeight;
+                
+                console.log('[Loading] Loading 已顯示:', text); // 確認顯示
+            } else {
+                console.error('[Loading] 找不到 loadingOverlay 元素!');
+            }
+        }
+
+        function hideLoading() {
+            console.log('[Loading] 準備隱藏 Loading'); // 添加調試訊息
+            
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+                console.log('[Loading] Loading 已隱藏'); // 確認隱藏
+            } else {
+                console.error('[Loading] 找不到 loadingOverlay 元素!');
+            }
+        }
+
+        // 顯示小型 Loading 指示器在特定元素
+        function showMiniLoading(element) {
+            if (!element) return;
+            
+            // 檢查是否已經有 mini-loading
+            if (element.querySelector('.mini-loading')) return;
+            
+            const miniLoader = document.createElement('span');
+            miniLoader.className = 'mini-loading';
+            element.appendChild(miniLoader);
+        }
+
+        function hideMiniLoading(element) {
+            if (!element) return;
+            
+            const miniLoader = element.querySelector('.mini-loading');
+            if (miniLoader) {
+                miniLoader.remove();
+            }
+        }
+
+        // 測試功能：Loading 效果測試
+        function testLoading() {
+            console.log('=== Loading 效果測試開始 ===');
+            
+            // 直接測試 showLoading 和 hideLoading
+            showLoading('測試模式', '正在測試 Loading 動畫效果');
+            
+            setTimeout(() => {
+                hideLoading();
+                console.log('=== Loading 效果測試結束 ===');
+                alert('Loading 測試完成！如果您看到了 Loading 動畫，說明功能正常');
+            }, 2000);
+        }
+
+        // 調試功能：切換調試模式
+        function toggleDebugMode() {
+            const cache = window.__WL_CACHE__;
+            if (cache) {
+                cache.DEBUG = !cache.DEBUG;
+                console.log('調試模式:', cache.DEBUG ? '開啟' : '關閉');
+                alert('調試模式已' + (cache.DEBUG ? '開啟' : '關閉') + '，請查看瀏覽器 Console');
+            }
+        }
+        
+        // 測試功能：階層勾選測試
+        function testHierarchy() {
+            const cache = window.__WL_CACHE__;
+            if (!cache) {
+                alert('Cache 尚未初始化');
+                return;
+            }
+            
+            console.log('=== 階層勾選與每日工時測試開始 ===');
+            
+            // 測試 Loading 效果
+            showLoading('測試模式', '正在進行階層勾選功能測試');
+            
+            setTimeout(() => {
+                // 找到第一個用戶和第一個專案進行測試
+                const firstUserName = cache.users ? Object.keys(cache.users)[0] : null;
+                const firstProjectName = firstUserName && cache.users[firstUserName].projects ? 
+                    Object.keys(cache.users[firstUserName].projects)[0] : null;
+                
+                if (firstUserName) {
+                    console.log('測試用戶:', firstUserName);
+                    const userData = cache.users[firstUserName];
+                    const userCheckbox = userData.checkbox;
                     
-                    // 確保是有效的工時數據
-                    if (hoursAttr && issueId) {
-                        const hours = parseFloat(hoursAttr) || 0;
-                        const issueIdNum = parseInt(issueId);
-                        
-                        // 計算所有層級的工時（包括人員、專案、ISSUE）
-                        if (hours > 0) {
-                            // 只有實際 ISSUE (issueId > 0) 才計入項目數
-                            if (issueIdNum > 0) {
-                                totalHours += hours;
-                                totalItems++;
-                                
-                                // 根據 checkbox 當前狀態決定納入或排除
-                                if (checkbox.checked) {
-                                    includedHours += hours;
-                                    includedItems++;
-                                } else {
-                                    excludedHours += hours;
-                                }
+                    if (userCheckbox) {
+                        // 記錄測試前的狀態（使用快取中的工作量單元格）
+                        const beforeUserCells = cache.cellsByUser[firstUserName] || [];
+                        console.log('測試前用戶工作量單元格數量:', beforeUserCells.length);
+                        beforeUserCells.forEach((cell, idx) => {
+                            if (cell.getAttribute('data-issue') === '-1') {
+                                console.log(`  用戶工作量 ${idx}: ${cell.textContent}`);
                             }
-                        }
+                        });
+                        
+                        console.log('找到用戶 checkbox，當前狀態:', userCheckbox.checked);
+                        // 切換狀態進行測試（這將觸發 Loading）
+                        userCheckbox.checked = !userCheckbox.checked;
+                        console.log('模擬用戶勾選切換到:', userCheckbox.checked);
+                        
+                        // 觸發階層勾選（會自動顯示 Loading）
+                        toggleCostCalculation(userCheckbox);
+                        
+                        // 等待更新後檢查結果
+                        setTimeout(() => {
+                            const afterUserCells = cache.cellsByUser[firstUserName] || [];
+                            console.log('測試後用戶工作量單元格:');
+                            afterUserCells.forEach((cell, idx) => {
+                                if (cell.getAttribute('data-issue') === '-1') {
+                                    console.log(`  用戶工作量 ${idx}: ${cell.textContent} (期間 ${cell.getAttribute('data-period-index')})`);
+                                }
+                            });
+                        }, 500);
                     }
                 }
                 
-                // 每處理一批就暫停，讓 UI 有機會更新
-                if (endIndex < allCheckboxes.length) {
-                    await new Promise(resolve => setTimeout(resolve, 5));
+                setTimeout(() => {
+                    if (firstUserName && firstProjectName) {
+                        console.log('測試專案:', `${firstUserName}/${firstProjectName}`);
+                        const projectData = cache.users[firstUserName].projects[firstProjectName];
+                        const projectCheckbox = projectData.checkbox;
+                        
+                        if (projectCheckbox) {
+                            // 記錄測試前的狀態（使用快取中的工作量單元格）
+                            const projectKey = `${firstUserName}|${firstProjectName}`;
+                            const beforeProjectCells = cache.cellsByProject[projectKey] || [];
+                            console.log('測試前專案工作量單元格數量:', beforeProjectCells.length);
+                            beforeProjectCells.forEach((cell, idx) => {
+                                if (cell.getAttribute('data-issue') === '-2') {
+                                    console.log(`  專案工作量 ${idx}: ${cell.textContent}`);
+                                }
+                            });
+                            
+                            console.log('找到專案 checkbox，當前狀態:', projectCheckbox.checked);
+                            // 切換狀態進行測試（這將觸發 Loading）
+                            projectCheckbox.checked = !projectCheckbox.checked;
+                            console.log('模擬專案勾選切換到:', projectCheckbox.checked);
+                            
+                            // 觸發階層勾選（會自動顯示 Loading）
+                            toggleCostCalculation(projectCheckbox);
+                            
+                            // 等待更新後檢查結果
+                            setTimeout(() => {
+                                const afterProjectCells = cache.cellsByProject[projectKey] || [];
+                                console.log('測試後專案工作量單元格:');
+                                afterProjectCells.forEach((cell, idx) => {
+                                    if (cell.getAttribute('data-issue') === '-2') {
+                                        console.log(`  專案工作量 ${idx}: ${cell.textContent} (期間 ${cell.getAttribute('data-period-index')})`);
+                                    }
+                                });
+                                
+                                console.log('=== 階層勾選與每日工時測試結束 ===');
+                                alert('測試完成！請查看瀏覽器 Console 並觀察表格中每日工時的變化以及 Loading 效果');
+                            }, 500);
+                        }
+                    }
+                }, 1500);
+                
+                hideLoading();
+            }, 1000);
+        }
+
+        /**
+         * 建立完整的內存模型（Memory Model）
+         * 一次性掃描 DOM 並建立快取，避免後續重複 querySelectorAll
+         */
+        async function buildWorkloadCache() {
+            const t0 = performance.now();
+            if (!window.__WL_CACHE__) window.__WL_CACHE__ = { DEBUG: false };
+            const cache = window.__WL_CACHE__;
+            
+            // 初始化所有快取結構
+            cache.issues = [];                          // ISSUE 資料陣列
+            cache.users = Object.create(null);          // 人員索引 {userName: userObj}
+            cache.projects = Object.create(null);       // 專案索引 {userName|projectName: projectObj}
+            cache.userSpans = Object.create(null);      // 人員總計 span
+            cache.projectSpans = Object.create(null);   // 專案總計 span
+            cache.checkboxByKey = Object.create(null);  // checkbox 快速查找 {user|project|issue: checkbox}
+            cache.allCheckboxes = [];                   // 所有 checkbox
+            cache.workloadCells = [];                   // 所有工作量單元格
+            cache.cellsByIssue = Object.create(null);   // 按 issue 組織的 cells {user|project|issue: [cells]}
+            cache.cellsByUser = Object.create(null);    // 按 user 組織的 cells {user: [cells]}
+            cache.cellsByProject = Object.create(null); // 按 project 組織的 cells {user|project: [cells]}
+            cache.issueCheckboxes = Object.create(null); // 議題 checkbox 快速查找 {issueId: checkbox}
+
+            // 1. 掃描所有 ISSUE checkbox（只掃描一次）
+            const issueCheckboxes = document.querySelectorAll('tbody input[type="checkbox"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])');
+            console.log(`[buildCache] 開始掃描 ${issueCheckboxes.length} 個議題...`);
+            let userCount = 0; // 追蹤新使用者數量
+            for (const cb of issueCheckboxes) {
+                const issueId = cb.getAttribute('data-issue');
+                const user = cb.getAttribute('data-user');
+                const project = cb.getAttribute('data-project');
+                const key = `${user}|${project}|${issueId}`;
+                
+                // ✅ 建立 issueCheckboxes 快取
+                cache.issueCheckboxes[issueId] = cb;
+                
+                // 建立 issue 物件
+                const row = cb.closest('tr');
+                const issueObj = { 
+                    checkbox: cb, 
+                    issueId, 
+                    user, 
+                    project, 
+                    periodHours: 0,
+                    key,
+                    row: row,
+                    id: issueId  // 加入 id 屬性供其他函數使用
+                };
+                cache.issues.push(issueObj);
+                cache.checkboxByKey[key] = cb;
+                cache.allCheckboxes.push(cb);
+                
+                // 初始化 user 索引（輪詢機制會負責更新 Loading 顯示）
+                if (!cache.users[user]) {
+                    cache.users[user] = {
+                        name: user,
+                        issues: [],
+                        projects: Object.create(null),
+                        checkbox: null,
+                        row: null,
+                        cells: []
+                    };
+                }
+                cache.users[user].issues.push(issueObj);
+                
+                // 初始化 project 索引
+                const projectKey = `${user}|${project}`;
+                if (!cache.projects[projectKey]) {
+                    cache.projects[projectKey] = {
+                        user,
+                        project,
+                        issues: [],
+                        checkbox: null,  // 稍後填入
+                        row: null,  // 稍後填入
+                        cells: []
+                    };
+                }
+                cache.projects[projectKey].issues.push(issueObj);
+                
+                // 將專案加入到使用者的專案列表中
+                if (!cache.users[user].projects[project]) {
+                    cache.users[user].projects[project] = cache.projects[projectKey];
                 }
             }
 
-            console.log('計算結果:', {
-                includedHours: includedHours.toFixed(1),
-                excludedHours: excludedHours.toFixed(1),
-                totalHours: totalHours.toFixed(1),
-                includedItems: includedItems,
-                totalItems: totalItems
+            // 2. 掃描人員層級 checkbox
+            document.querySelectorAll('input[data-issue="-1"]').forEach(cb => {
+                const user = cb.getAttribute('data-user');
+                const key = `${user}|-1`;
+                cache.checkboxByKey[key] = cb;
+                cache.allCheckboxes.push(cb);
+                if (cache.users[user]) {
+                    cache.users[user].checkbox = cb;
+                    // 儲存該行的 row 元素
+                    const row = cb.closest('tr');
+                    if (row) {
+                        cache.users[user].row = row;
+                    }
+                }
             });
 
-            // 立即更新 DOM 顯示
+            // 3. 掃描專案層級 checkbox
+            document.querySelectorAll('input[data-issue="-2"]').forEach(cb => {
+                const user = cb.getAttribute('data-user');
+                const project = cb.getAttribute('data-project');
+                const key = `${user}|${project}|-2`;
+                const projectKey = `${user}|${project}`;
+                cache.checkboxByKey[key] = cb;
+                cache.allCheckboxes.push(cb);
+                if (cache.projects[projectKey]) {
+                    cache.projects[projectKey].checkbox = cb;
+                    // 儲存該行的 row 元素
+                    const row = cb.closest('tr');
+                    if (row) {
+                        cache.projects[projectKey].row = row;
+                    }
+                }
+            });
+
+            // 4. 掃描人員總計 span (無 data-project)
+            document.querySelectorAll('span[data-user][data-original-hours]:not([data-project])')
+                .forEach(sp => { 
+                    const user = sp.getAttribute('data-user');
+                    cache.userSpans[user] = sp; 
+                    if (cache.users[user]) {
+                        cache.users[user].span = sp;
+                    }
+                });
+
+            // 5. 掃描專案總計 span
+            document.querySelectorAll('span[data-user][data-project][data-original-hours]')
+                .forEach(sp => { 
+                    const user = sp.getAttribute('data-user');
+                    const project = sp.getAttribute('data-project');
+                    const key = `${user}|${project}`;
+                    cache.projectSpans[key] = sp;
+                    if (cache.projects[key]) {
+                        cache.projects[key].span = sp;
+                    }
+                });
+
+            // 6. 掃描所有工作量單元格（只掃描一次）
+            const allWorkloadCells = document.querySelectorAll('td.workload-cell[data-period-index]');
+            allWorkloadCells.forEach(cell => {
+                const issueId = cell.getAttribute('data-issue');
+                const user = cell.getAttribute('data-user');
+                const project = cell.getAttribute('data-project');
+                const periodIndex = cell.getAttribute('data-period-index');
+                const originalWorkload = parseFloat(cell.getAttribute('data-original-workload')) || 0;
+                
+                const cellObj = {
+                    element: cell,
+                    issueId,
+                    user,
+                    project,
+                    periodIndex,
+                    originalWorkload
+                };
+                
+                cache.workloadCells.push(cellObj);
+                
+                // 按 issue 組織
+                const issueKey = `${user}|${project}|${issueId}`;
+                if (!cache.cellsByIssue[issueKey]) {
+                    cache.cellsByIssue[issueKey] = [];
+                }
+                cache.cellsByIssue[issueKey].push(cellObj);
+                // 也用 issueId 純鍵存一份（供後續計算快速以 issueId 直接取）
+                if (!cache.cellsByIssue[issueId]) {
+                    cache.cellsByIssue[issueId] = [];
+                }
+                cache.cellsByIssue[issueId].push(cellObj);
+                
+                // 按 user 組織（人員總計行 issueId="-1"）
+                if (issueId === '-1') {
+                    if (!cache.cellsByUser[user]) {
+                        cache.cellsByUser[user] = [];
+                    }
+                    cache.cellsByUser[user].push(cellObj);
+                    if (cache.users[user]) {
+                        cache.users[user].cells.push(cellObj);
+                    }
+                }
+                
+                // 按 project 組織（專案總計行 issueId="-2"）
+                if (issueId === '-2' && project) {
+                    const projectKey = `${user}|${project}`;
+                    if (!cache.cellsByProject[projectKey]) {
+                        cache.cellsByProject[projectKey] = [];
+                    }
+                    cache.cellsByProject[projectKey].push(cellObj);
+                    if (cache.projects[projectKey]) {
+                        cache.projects[projectKey].cells.push(cellObj);
+                    }
+                }
+            });
+
+            if (cache.DEBUG) {
+                console.log('[Cache] 內存模型建立完成:', {
+                    'buildTime(ms)': (performance.now() - t0).toFixed(2),
+                    'issues': cache.issues.length,
+                    'users': Object.keys(cache.users).length,
+                    'projects': Object.keys(cache.projects).length,
+                    'allCheckboxes': cache.allCheckboxes.length,
+                    'workloadCells': cache.workloadCells.length
+                });
+            }
+        }
+
+        // 設置 DOM 變化監聽器，監控新增的人員
+        function setupDOMChangeObserver() {
+            const targetNode = document.querySelector('tbody'); // 監聽 table body
+            if (!targetNode) {
+                console.warn('[DOM] 找不到 tbody，無法設置監聽器');
+                return;
+            }
+
+            const observer = new MutationObserver(function(mutations) {
+                let hasNewUsers = false;
+                let latestUser = null;
+                
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === Node.ELEMENT_NODE) {
+                                // 檢查新增的節點是否包含 issue-title 或人員資訊
+                                const issueTitles = node.querySelectorAll ? node.querySelectorAll('.issue-title') : [];
+                                const userCells = node.querySelectorAll ? node.querySelectorAll('[data-user]') : [];
+                                
+                                if (issueTitles.length > 0 || userCells.length > 0 || node.matches?.('.issue-title') || node.matches?.('[data-user]')) {
+                                    hasNewUsers = true;
+                                    // 取得使用者名稱
+                                    if (node.matches?.('[data-user]')) {
+                                        latestUser = node.getAttribute('data-user');
+                                    } else if (userCells.length > 0) {
+                                        latestUser = userCells[userCells.length - 1].getAttribute('data-user');
+                                    } else if (issueTitles.length > 0) {
+                                        // 從 issue-title 元素嘗試取得使用者名稱
+                                        const titleText = issueTitles[0].textContent || '';
+                                        const match = titleText.match(/(\S+)/); // 取第一個非空白字符序列作為使用者名
+                                        if (match) latestUser = match[1];
+                                    }
+                                    console.log('[DOM] 檢測到新增使用者相關元素:', latestUser || '未知');
+                                }
+                            }
+                        });
+                    }
+                });
+                
+                // 如果檢測到新使用者，更新 LOADING 顯示
+                if (hasNewUsers && latestUser) {
+                    try {
+                        const subEl = document.getElementById('loadingSubtext');
+                        if (subEl && /正在重新計算成本與工時統計/.test(subEl.textContent)) {
+                            subEl.textContent = subEl.textContent.replace(/(正在重新計算成本與工時統計)( - .*)?$/, `$1 - ${latestUser}`);
+                            console.log('[DOM] 更新 LOADING 至使用者:', latestUser);
+                        }
+                    } catch(e) {
+                        console.warn('[DOM] 更新 LOADING 錯誤:', e);
+                    }
+                }
+            });
+
+            // 開始監聽
+            observer.observe(targetNode, {
+                childList: true,
+                subtree: true
+            });
+            
+            console.log('[DOM] 已設置 TABLE 變化監聽器');
+        }
+
+        // 輪詢方式補強：定期檢查新出現的使用者 / issue-title
+        let __WL_USER_POLL_TIMER = null;
+        let __WL_USER_POLL_LAST_COUNT = 0;
+        let __WL_USER_POLL_LAST_NAME = '';
+        let __WL_USER_POLL_START_TS = 0;
+        function startIncrementalUserLoadingUpdates(){
+            if (__WL_USER_POLL_TIMER) return; // 已啟動
+            __WL_USER_POLL_LAST_COUNT = 0;
+            __WL_USER_POLL_LAST_NAME = '';
+            __WL_USER_POLL_START_TS = Date.now();
+            __WL_USER_POLL_TIMER = setInterval(()=>{
+                try {
+                    const subEl = document.getElementById('loadingSubtext');
+                    if (!subEl) return;
+                    // 只在仍是初始化訊息階段時處理
+                    if (!/正在重新計算成本與工時統計/.test(subEl.textContent)) {
+                        // 當 loading 進入下一階段時自動停止輪詢
+                        clearInterval(__WL_USER_POLL_TIMER); __WL_USER_POLL_TIMER = null; return;
+                    }
+                    // 超過 15 秒仍未進入下一階段則停止（防止無限輪詢）
+                    if (Date.now() - __WL_USER_POLL_START_TS > 15000) {
+                        clearInterval(__WL_USER_POLL_TIMER); __WL_USER_POLL_TIMER = null; return;
+                    }
+                    const cache = window.__WL_CACHE__;
+                    // 優先使用快取中的 users
+                    let userNames = [];
+                    if (cache && cache.users) {
+                        userNames = Object.keys(cache.users);
+                    }
+                    // 若無法從快取得到，從 DOM 抓取 .issue-title 或 data-user
+                    if (userNames.length === 0) {
+                        const domUsers = new Set();
+                        document.querySelectorAll('[data-user]').forEach(el=>{ const u = el.getAttribute('data-user'); if (u) domUsers.add(u); });
+                        document.querySelectorAll('.issue-title').forEach(el=>{ const txt = el.textContent.trim(); if (txt) domUsers.add(txt.split(/\s|\(|（/)[0]); });
+                        userNames = Array.from(domUsers);
+                    }
+                    if (userNames.length === 0) return; // 尚未解析出使用者
+                    const latest = userNames[userNames.length-1];
+                    // 只有在人數或最後一位不同時才更新 DOM
+                    if (userNames.length !== __WL_USER_POLL_LAST_COUNT || latest !== __WL_USER_POLL_LAST_NAME) {
+                        subEl.textContent = `正在重新計算成本與工時統計 - ${latest} (${userNames.length})`;
+                        __WL_USER_POLL_LAST_COUNT = userNames.length;
+                        __WL_USER_POLL_LAST_NAME = latest;
+                        if (cache && cache.DEBUG) console.log('[Loading-Poll] 最新使用者:', latest, '人數=', __WL_USER_POLL_LAST_COUNT);
+                    }
+                } catch(e) { /* 忽略輪詢錯誤 */ }
+            }, 120); // 120ms 一次，兼顧即時與性能
+        }
+
+        function refreshIssuePeriodHours() {
+            if (!window.__WL_CACHE__) {
+                console.warn('refreshIssuePeriodHours: Cache 不存在');
+                return;
+            }
+            const cache = window.__WL_CACHE__;
+            const t0 = performance.now();
+            let updatedCount = 0;
+            let totalHours = 0;
+            
+            cache.issues.forEach(item => {
+                let h = parseFloat(item.checkbox.getAttribute('data-hours'));
+                // 若已完成初次正式計算且 data-hours 有值，直接使用避免重複重算
+                if (cache.periodHoursReady && !isNaN(h)) {
+                    // 使用既有 h
+                } else if (isNaN(h) || h === 0) {
+                    // fallback: 使用快取中的 cellsByIssue
+                    h = 0;
+                    const cells = cache.cellsByIssue[item.issueId];
+                    if (cells) {
+                        cells.forEach(cellObj => {
+                            // cellObj 來自 buildWorkloadCache 的 {element, originalWorkload,...}
+                            const workload = typeof cellObj.originalWorkload === 'number' ? cellObj.originalWorkload : (cellObj.element ? (parseFloat(cellObj.element.getAttribute('data-original-workload')) || 0) : 0);
+                            if (!isNaN(workload)) h += workload;
+                        });
+                    }
+                    if (!isNaN(h)) item.checkbox.setAttribute('data-hours', h.toFixed(1));
+                }
+                item.periodHours = h;
+                if (h > 0) {
+                    updatedCount++;
+                    totalHours += h;
+                }
+                
+                // 更新 DOM 中的區間工時顯示
+                const periodHoursSpan = document.getElementById(`period-hours-${item.issueId}`);
+                if (periodHoursSpan) {
+                    periodHoursSpan.textContent = `區間: ${h.toFixed(1)} 小時`;
+                } else {
+                    // 調試信息：找不到對應的span元素
+                    if (cache.DEBUG) console.warn(`找不到 period-hours-${item.issueId} 元素`);
+                }
+            });
+            
+            console.log(`refreshIssuePeriodHours: ${updatedCount}/${cache.issues.length} 個議題有工時, 總計 ${totalHours.toFixed(1)} hrs`);
+            if (cache.DEBUG) console.log('[Perf] refreshIssuePeriodHours ms=', (performance.now() - t0).toFixed(2));
+        }
+
+        // 更新成本統計 - 純前端計算（異步版本）
+        async function updateCostStatisticsAsync() {
+            const t0 = performance.now();
+            if (!window.__WL_CACHE__) {
+                console.warn('updateCostStatisticsAsync: Cache 不存在，建立快取');
+                await buildWorkloadCache();
+            }
+            const cache = window.__WL_CACHE__;
+            // 僅在未完成初次計算時刷新
+            if (!cache.periodHoursReady) {
+                refreshIssuePeriodHours();
+            }
+            
+            let includedHours = 0, excludedHours = 0, totalHours = 0;
+            let includedItems = 0, totalItems = 0;
+
+            console.log(`成本統計計算: 檢查 ${cache.issues.length} 個議題`);
+
+            // 調試：檢查前幾個議題的 periodHours
+            let debugCount = 0;
+            for (const issue of cache.issues) {
+                if (debugCount < 3) {
+                    console.log(`  議題 ${issue.issueId}: periodHours=${issue.periodHours}, data-hours=${issue.checkbox.getAttribute('data-hours')}`);
+                    debugCount++;
+                }
+                
+                const hours = issue.periodHours;
+                const issueIdNum = parseInt(issue.issueId);
+                if (issueIdNum > 0 && hours > 0) {
+                    totalHours += hours; totalItems++;
+                    // 即時讀取 checkbox.checked 狀態（不依賴快取的勾選狀態）
+                    if (issue.checkbox.checked) { includedHours += hours; includedItems++; }
+                    else excludedHours += hours;
+                }
+            }
+
+            console.log(`成本統計結果: 納入=${includedHours.toFixed(1)}hrs, 排除=${excludedHours.toFixed(1)}hrs, 總計=${totalHours.toFixed(1)}hrs, 項目=${includedItems}/${totalItems}`);
+
             const includedElement = document.getElementById('includedHours');
             const excludedElement = document.getElementById('excludedHours');
             const totalElement = document.getElementById('totalHours');
             const itemsElement = document.getElementById('includedItems');
             
+            // 更新成本統計顯示（添加更新閃爍效果作為視覺反饋）
             if (includedElement) {
                 includedElement.textContent = includedHours.toFixed(1) + ' hrs';
+                includedElement.style.transition = 'color 0.3s';
+                includedElement.style.color = '#2196F3';
+                setTimeout(() => { includedElement.style.color = ''; }, 300);
             }
-            if (excludedElement) {
-                excludedElement.textContent = excludedHours.toFixed(1) + ' hrs';
-            }
-            if (totalElement) {
-                totalElement.textContent = totalHours.toFixed(1) + ' hrs';
-            }
-            if (itemsElement) {
-                itemsElement.textContent = includedItems + ' / ' + totalItems;
-            }
-            
-            console.log('=== updateCostStatisticsAsync 完成 ===');
+            if (excludedElement) excludedElement.textContent = excludedHours.toFixed(1) + ' hrs';
+            if (totalElement) totalElement.textContent = totalHours.toFixed(1) + ' hrs';
+            if (itemsElement) itemsElement.textContent = includedItems + ' / ' + totalItems;
+            if (cache.DEBUG) console.log('[Perf] updateCostStatisticsAsync ms=', (performance.now()-t0).toFixed(2));
         }
 
         // 更新成本統計 - 純前端計算
-        function updateCostStatistics() {
-            console.log('=== updateCostStatistics 開始 ===');
+        let __WL_RECALC_TIMER = null;
+        let __WL_RECALC_RUNNING = false;
+        let __WL_LOADING_SHOWN = false; // 追蹤 Loading 是否已顯示
+        
+        function scheduleCostAndSummaryRecalc(reason='toggle', immediate=false){
+            if (window.__WL_CACHE__ && window.__WL_CACHE__.DEBUG) console.log('[Sched] 排程重算 reason=', reason, 'immediate=', immediate);
+            if (__WL_RECALC_TIMER) clearTimeout(__WL_RECALC_TIMER);
             
-            // 重新掃描所有 checkbox 並計算
-            const allCheckboxes = document.querySelectorAll('tbody input[type="checkbox"]');
-            console.log('找到 checkbox 數量:', allCheckboxes.length);
+            // 根據操作類型動態調整延遲：單一 toggle 用 100ms，批次操作用 200ms
+            const delay = immediate ? 0 : (reason === 'toggle' ? 100 : 200);
             
-            let includedHours = 0;
-            let excludedHours = 0;
-            let totalHours = 0;
-            let includedItems = 0;
-            let totalItems = 0;
-
-            // 遍歷每個 checkbox，根據當前狀態計算
-            allCheckboxes.forEach((checkbox, index) => {
-                const hoursAttr = checkbox.getAttribute('data-hours');
-                const issueId = checkbox.getAttribute('data-issue');
+            // 總是顯示 Loading（除了 immediate 模式）
+            const shouldShowLoading = !immediate;
+            
+            __WL_RECALC_TIMER = setTimeout(async ()=>{
+                if (__WL_RECALC_RUNNING) { // 若仍在跑，延後再試
+                    if (window.__WL_CACHE__ && window.__WL_CACHE__.DEBUG) console.log('[Sched] 重算仍在執行，重新排程');
+                    scheduleCostAndSummaryRecalc('rerun');
+                    return;
+                }
+                __WL_RECALC_RUNNING = true;
                 
-                console.log(`Checkbox ${index}:`, {
-                    hoursAttr: hoursAttr,
-                    issueId: issueId,
-                    checked: checkbox.checked
-                });
-                
-                // 確保是有效的工時數據
-                if (hoursAttr && issueId) {
-                    const hours = parseFloat(hoursAttr) || 0;
-                    const issueIdNum = parseInt(issueId);
-                    
-                    console.log(`  -> 解析後: hours=${hours}, issueIdNum=${issueIdNum}`);
-                    
-                    // 計算所有層級的工時（包括人員、專案、ISSUE）
-                    if (hours > 0) {
-                        // 只有實際 ISSUE (issueId > 0) 才計入項目數
-                        if (issueIdNum > 0) {
-                            totalHours += hours;
-                            totalItems++;
-                            
-                            // 根據 checkbox 當前狀態決定納入或排除
-                            if (checkbox.checked) {
-                                includedHours += hours;
-                                includedItems++;
-                                console.log(`  -> [ISSUE] 納入計算: ${hours} hrs`);
-                            } else {
-                                excludedHours += hours;
-                                console.log(`  -> [ISSUE] 排除計算: ${hours} hrs`);
-                            }
-                        } else if (issueIdNum === -1 || issueIdNum === -2) {
-                            // 人員和專案層級的總計不計入統計（避免重複計算）
-                            // 因為它們的工時已經包含在下層 ISSUE 中
-                            console.log(`  -> [總計行] 跳過: ${hours} hrs (issueId=${issueIdNum})`);
+                try {
+                    // 顯示 Loading（根據操作類型調整提示文字）
+                    if (shouldShowLoading) {
+                        let loadingText = '計算中...';
+                        let loadingSubtext = '正在重新計算成本與工時統計';
+                        
+                        if (reason === 'selectAll') {
+                            loadingText = '批次處理中...';
+                            loadingSubtext = '正在更新所有項目的成本與工時';
+                        } else if (reason === 'batch') {
+                            loadingText = '批次計算中...';
+                            loadingSubtext = '正在處理多個項目的成本統計';
+                        } else if (reason === 'toggle') {
+                            loadingText = '更新中...';
+                            loadingSubtext = '正在重新計算成本與每日工時';
                         }
+                        
+                        // 只在 Loading 未顯示時才顯示（toggle 操作已經顯示了）
+                        if (!__WL_LOADING_SHOWN) {
+                            showLoading(loadingText, loadingSubtext);
+                            // 初次顯示後立即加上第一位使用者名稱
+                            try {
+                                const cache = window.__WL_CACHE__;
+                                if (cache && cache.users) {
+                                    const firstUser = Object.keys(cache.users)[0];
+                                    if (firstUser) {
+                                        const subEl = document.getElementById('loadingSubtext');
+                                        if (subEl && /正在重新計算成本與工時統計|正在重新計算成本與每日工時|正在更新每日工時分佈/.test(subEl.textContent)) {
+                                            subEl.textContent = subEl.textContent + ' - ' + firstUser;
+                                        }
+                                    }
+                                }
+                            } catch(e) { /* 忽略首次附加錯誤 */ }
+                        }
+                        __WL_LOADING_SHOWN = true;
+                    }
+                    
+                    // 在顯示期間動態輪播使用者名稱（提升體驗）
+                    const startUserRotation = () => {
+                        try {
+                            const cache = window.__WL_CACHE__;
+                            const subEl = document.getElementById('loadingSubtext');
+                            if (!cache || !cache.users || !subEl) return;
+                            const userNames = Object.keys(cache.users);
+                            if (userNames.length === 0) return;
+                            let idx = 0;
+                            if (window.__WL_ROTATE_TIMER) { clearInterval(window.__WL_ROTATE_TIMER); }
+                            window.__WL_ROTATE_TIMER = setInterval(()=>{
+                                if (!subEl) return;
+                                const name = userNames[idx % userNames.length];
+                                subEl.textContent = subEl.textContent.replace(/(正在重新計算成本與每日工時|正在更新每日工時分佈|正在重新計算成本與工時統計|正在處理多個項目的成本統計|正在更新所有項目的成本與工時|正在更新相關圖表).*/, `$1 - ${name}`);
+                                idx++;
+                            }, 800);
+                        } catch(e) { /* 忽略輪播錯誤 */ }
+                    };
+                    if (shouldShowLoading) startUserRotation();
+
+                    // 強制保險：8 秒後自動隱藏 (避免異常卡住)
+                    if (window.__WL_FORCE_HIDE_TIMER) clearTimeout(window.__WL_FORCE_HIDE_TIMER);
+                    window.__WL_FORCE_HIDE_TIMER = setTimeout(()=>{
+                        try {
+                            if (window.__WL_ROTATE_TIMER) { clearInterval(window.__WL_ROTATE_TIMER); window.__WL_ROTATE_TIMER = null; }
+                            hideLoading();
+                            __WL_LOADING_SHOWN = false;
+                            console.warn('[Loading] 強制超時隱藏');
+                        } catch(e){}
+                    }, 8000);
+
+                    // 第1步：更新成本統計
+                    await updateCostStatisticsAsync();
+                    
+                    // 第2步：更新總計行工時統計（但不包含每日工時）
+                    await updateSummaryRowsHoursAsyncOnly(); 
+                    
+                    // 第3步：更新每日工時（優先執行）
+                    if (shouldShowLoading) {
+                        showLoading('更新中...', '正在更新每日工時分佈');
+                    }
+                    await updateWorkloadCellsAsync();
+                    
+                    // 第4步：最後更新圖表
+                    if (shouldShowLoading) {
+                        showLoading('完成中...', '正在更新相關圖表');
+                    }
+                    if (typeof updateCharts === 'function') {
+                        await new Promise(resolve => {
+                            requestAnimationFrame(()=> { 
+                                try { 
+                                    updateCharts(); 
+                                    resolve();
+                                } catch(e){ 
+                                    console.warn('updateCharts error', e);
+                                    resolve();
+                                } 
+                            });
+                        });
+                    }
+                } finally {
+                    __WL_RECALC_RUNNING = false;
+                    
+                    // 隱藏 Loading
+                    if (shouldShowLoading) {
+                        // 確保 Loading 至少顯示 300ms，提供良好的視覺回饋
+                        setTimeout(() => {
+                            if (window.__WL_ROTATE_TIMER) { clearInterval(window.__WL_ROTATE_TIMER); window.__WL_ROTATE_TIMER = null; }
+                            if (window.__WL_FORCE_HIDE_TIMER) { clearTimeout(window.__WL_FORCE_HIDE_TIMER); window.__WL_FORCE_HIDE_TIMER = null; }
+                            hideLoading();
+                            __WL_LOADING_SHOWN = false; // 重置標記
+                        }, Math.max(0, 300));
                     }
                 }
-            });
+            }, delay);
+        }
+        function updateCostStatistics(immediate=false) { scheduleCostAndSummaryRecalc('manual', immediate); }
 
-            console.log('計算結果:', {
-                includedHours: includedHours.toFixed(1),
-                excludedHours: excludedHours.toFixed(1),
-                totalHours: totalHours.toFixed(1),
-                includedItems: includedItems,
-                totalItems: totalItems
-            });
+        // 僅更新專案和人員總計行的工時顯示（不包含每日工時更新）
+        async function updateSummaryRowsHoursAsyncOnly() {
+            const t0 = performance.now();
+            if (!window.__WL_CACHE__) {
+                await buildWorkloadCache();
+                refreshIssuePeriodHours(); // 確保 periodHours 已計算
+            }
+            const cache = window.__WL_CACHE__;
+            const userAgg = Object.create(null);
+            const projectAgg = Object.create(null);
 
-            // 立即更新 DOM 顯示
-            const includedElement = document.getElementById('includedHours');
-            const excludedElement = document.getElementById('excludedHours');
-            const totalElement = document.getElementById('totalHours');
-            const itemsElement = document.getElementById('includedItems');
-            
-            console.log('DOM 元素檢查:', {
-                includedElement: !!includedElement,
-                excludedElement: !!excludedElement,
-                totalElement: !!totalElement,
-                itemsElement: !!itemsElement
-            });
-            
-            if (includedElement) {
-                const newValue = includedHours.toFixed(1) + ' hrs';
-                console.log('更新 includedHours:', includedElement.textContent, '->', newValue);
-                includedElement.textContent = newValue;
-                // 強制重繪
-                includedElement.style.display = 'none';
-                includedElement.offsetHeight; // 觸發 reflow
-                includedElement.style.display = '';
+            // 單次迴圈聚合 (使用快取的 issues 陣列，避免重新 querySelectorAll)
+            for (const issue of cache.issues) {
+                const hours = issue.periodHours; // 已預先計算的區間工時
+                if (hours <= 0) continue;
+                const user = issue.user;
+                const project = issue.project;
+                const key = user + '|' + project;
+                // 即時讀取 checkbox.checked 狀態（確保獲取最新勾選狀態）
+                const checked = issue.checkbox.checked;
+
+                let ua = userAgg[user];
+                if (!ua) userAgg[user] = ua = {total:0, included:0, excluded:0, totalCount:0, includedCount:0};
+                let pa = projectAgg[key];
+                if (!pa) projectAgg[key] = pa = {total:0, included:0, excluded:0, totalCount:0, includedCount:0};
+
+                ua.total += hours; ua.totalCount++;
+                pa.total += hours; pa.totalCount++;
+                if (checked) { ua.included += hours; ua.includedCount++; pa.included += hours; pa.includedCount++; }
+                else { ua.excluded += hours; pa.excluded += hours; }
             }
-            if (excludedElement) {
-                const newValue = excludedHours.toFixed(1) + ' hrs';
-                console.log('更新 excludedHours:', excludedElement.textContent, '->', newValue);
-                excludedElement.textContent = newValue;
-                // 強制重繪
-                excludedElement.style.display = 'none';
-                excludedElement.offsetHeight;
-                excludedElement.style.display = '';
+
+            // 批次更新文字 (最少重排)
+            for (const user in userAgg) {
+                const span = cache.userSpans[user];
+                if (!span) continue;
+                const d = userAgg[user];
+                let txt;
+                if (d.includedCount === d.totalCount) txt = `總工時: ${d.included.toFixed(1)} 小時`;
+                else if (d.includedCount === 0) txt = `總工時: 0.0 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                else txt = `總工時: ${d.included.toFixed(1)} 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                span.textContent = txt;
             }
-            if (totalElement) {
-                const newValue = totalHours.toFixed(1) + ' hrs';
-                console.log('更新 totalHours:', totalElement.textContent, '->', newValue);
-                totalElement.textContent = newValue;
-                // 強制重繪
-                totalElement.style.display = 'none';
-                totalElement.offsetHeight;
-                totalElement.style.display = '';
+            for (const key in projectAgg) {
+                const span = cache.projectSpans[key];
+                if (!span) continue;
+                const d = projectAgg[key];
+                let txt;
+                if (d.includedCount === d.totalCount) txt = `總工時: ${d.included.toFixed(1)} 小時`;
+                else if (d.includedCount === 0) txt = `總工時: 0.0 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                else txt = `總工時: ${d.included.toFixed(1)} 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                span.textContent = txt;
             }
-            if (itemsElement) {
-                const newValue = includedItems + ' / ' + totalItems;
-                console.log('更新 includedItems:', itemsElement.textContent, '->', newValue);
-                itemsElement.textContent = newValue;
-                // 強制重繪
-                itemsElement.style.display = 'none';
-                itemsElement.offsetHeight;
-                itemsElement.style.display = '';
-            }
-            
-            console.log('=== updateCostStatistics 完成 ===');
-            
-            // 同時更新所有總計行的工時顯示
-            updateSummaryRowsHours();
+
+            if (cache.DEBUG) console.log('[Perf] updateSummaryRowsHoursAsyncOnly ms=', (performance.now()-t0).toFixed(2));
         }
 
         // 更新專案和人員總計行的工時顯示（異步版本）
         async function updateSummaryRowsHoursAsync() {
-            console.log('=== updateSummaryRowsHoursAsync 開始 ===');
-            
-            // 先重新計算區間工時，確保使用最新的區間數據
-            await calculatePeriodHoursAsync();
-            
-            // 1. 收集每個人員的工時數據
-            const userHours = {};
-            
-            // 2. 收集每個專案的工時數據
-            const projectHours = {};
-            
-            // 掃描所有 ISSUE checkbox
-            const allIssueCheckboxes = document.querySelectorAll('tbody input[type="checkbox"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])');
-            const batchSize = 100;
-            
-            // 分批處理 checkbox
-            for (let i = 0; i < allIssueCheckboxes.length; i += batchSize) {
-                const endIndex = Math.min(i + batchSize, allIssueCheckboxes.length);
-                
-                for (let j = i; j < endIndex; j++) {
-                    const checkbox = allIssueCheckboxes[j];
-                    const userName = checkbox.getAttribute('data-user');
-                    const projectName = checkbox.getAttribute('data-project');
-                    const issueId = checkbox.getAttribute('data-issue');
-                    // 使用區間內實際工時而不是預估工時
-                    const hours = calculateIssueActualPeriodHours(issueId);
-                    const isChecked = checkbox.checked;
-                    
-                    if (issueId && parseInt(issueId) > 0 && hours > 0) {
-                        // 初始化人員數據
-                        if (!userHours[userName]) {
-                            userHours[userName] = { total: 0, included: 0, excluded: 0, totalCount: 0, includedCount: 0 };
-                        }
-                        
-                        // 初始化專案數據
-                        const projectKey = `${userName}|${projectName}`;
-                        if (!projectHours[projectKey]) {
-                            projectHours[projectKey] = { total: 0, included: 0, excluded: 0, totalCount: 0, includedCount: 0 };
-                        }
-                        
-                        // 累計工時
-                        userHours[userName].total += hours;
-                        userHours[userName].totalCount++;
-                        projectHours[projectKey].total += hours;
-                        projectHours[projectKey].totalCount++;
-                        
-                        if (isChecked) {
-                            userHours[userName].included += hours;
-                            userHours[userName].includedCount++;
-                            projectHours[projectKey].included += hours;
-                            projectHours[projectKey].includedCount++;
-                        } else {
-                            userHours[userName].excluded += hours;
-                            projectHours[projectKey].excluded += hours;
-                        }
-                    }
-                }
-                
-                // 每處理一批就暫停，讓 UI 有機會更新
-                if (endIndex < allIssueCheckboxes.length) {
-                    await new Promise(resolve => setTimeout(resolve, 5));
-                }
+            const t0 = performance.now();
+            if (!window.__WL_CACHE__) {
+                await buildWorkloadCache();
+                refreshIssuePeriodHours(); // 確保 periodHours 已計算
             }
-            
-            console.log('人員工時統計:', userHours);
-            console.log('專案工時統計:', projectHours);
-            
-            // 3. 更新人員總計行的顯示
-            for (const userName in userHours) {
-                const data = userHours[userName];
-                const userSpan = document.querySelector(`span[data-user="${userName}"][data-original-hours]:not([data-project])`);
-                
-                if (userSpan) {
-                    let displayText;
-                    
-                    if (data.includedCount === data.totalCount) {
-                        // 全選
-                        displayText = `總工時: ${data.included.toFixed(1)} 小時`;
-                    } else if (data.includedCount === 0) {
-                        // 全不選
-                        displayText = `總工時: 0.0 小時 (排除 ${data.excluded.toFixed(1)} 小時)`;
-                    } else {
-                        // 部分選取
-                        displayText = `總工時: ${data.included.toFixed(1)} 小時 (排除 ${data.excluded.toFixed(1)} 小時)`;
-                    }
-                    
-                    console.log(`更新人員 ${userName}: ${userSpan.textContent} -> ${displayText}`);
-                    userSpan.textContent = displayText;
-                }
+            const cache = window.__WL_CACHE__;
+            const userAgg = Object.create(null);
+            const projectAgg = Object.create(null);
+
+            // 單次迴圈聚合 (使用快取的 issues 陣列，避免重新 querySelectorAll)
+            for (const issue of cache.issues) {
+                const hours = issue.periodHours; // 已預先計算的區間工時
+                if (hours <= 0) continue;
+                const user = issue.user;
+                const project = issue.project;
+                const key = user + '|' + project;
+                // 即時讀取 checkbox.checked 狀態（確保獲取最新勾選狀態）
+                const checked = issue.checkbox.checked;
+
+                let ua = userAgg[user];
+                if (!ua) userAgg[user] = ua = {total:0, included:0, excluded:0, totalCount:0, includedCount:0};
+                let pa = projectAgg[key];
+                if (!pa) projectAgg[key] = pa = {total:0, included:0, excluded:0, totalCount:0, includedCount:0};
+
+                ua.total += hours; ua.totalCount++;
+                pa.total += hours; pa.totalCount++;
+                if (checked) { ua.included += hours; ua.includedCount++; pa.included += hours; pa.includedCount++; }
+                else { ua.excluded += hours; pa.excluded += hours; }
             }
-            
-            // 4. 更新專案總計行的顯示
-            for (const projectKey in projectHours) {
-                const [userName, projectName] = projectKey.split('|');
-                const data = projectHours[projectKey];
-                const projectSpan = document.querySelector(`span[data-user="${userName}"][data-project="${projectName}"][data-original-hours]`);
-                
-                if (projectSpan) {
-                    let displayText;
-                    
-                    if (data.includedCount === data.totalCount) {
-                        // 全選
-                        displayText = `總工時: ${data.included.toFixed(1)} 小時`;
-                    } else if (data.includedCount === 0) {
-                        // 全不選
-                        displayText = `總工時: 0.0 小時 (排除 ${data.excluded.toFixed(1)} 小時)`;
-                    } else {
-                        // 部分選取
-                        displayText = `總工時: ${data.included.toFixed(1)} 小時 (排除 ${data.excluded.toFixed(1)} 小時)`;
-                    }
-                    
-                    console.log(`更新專案 ${userName}/${projectName}: ${projectSpan.textContent} -> ${displayText}`);
-                    projectSpan.textContent = displayText;
-                }
+
+            // 批次更新文字 (最少重排)
+            for (const user in userAgg) {
+                const span = cache.userSpans[user];
+                if (!span) continue;
+                const d = userAgg[user];
+                let txt;
+                if (d.includedCount === d.totalCount) txt = `總工時: ${d.included.toFixed(1)} 小時`;
+                else if (d.includedCount === 0) txt = `總工時: 0.0 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                else txt = `總工時: ${d.included.toFixed(1)} 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                span.textContent = txt;
             }
-            
-            console.log('=== updateSummaryRowsHoursAsync 完成 ===');
-            
-            // 同時更新每日/每週/每月的工作量顯示
+            for (const key in projectAgg) {
+                const span = cache.projectSpans[key];
+                if (!span) continue;
+                const d = projectAgg[key];
+                let txt;
+                if (d.includedCount === d.totalCount) txt = `總工時: ${d.included.toFixed(1)} 小時`;
+                else if (d.includedCount === 0) txt = `總工時: 0.0 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                else txt = `總工時: ${d.included.toFixed(1)} 小時 (排除 ${d.excluded.toFixed(1)} 小時)`;
+                span.textContent = txt;
+            }
+
+            if (cache.DEBUG) console.log('[Perf] updateSummaryRowsHoursAsync ms=', (performance.now()-t0).toFixed(2));
             await updateWorkloadCellsAsync();
         }
 
@@ -1505,21 +2796,25 @@
         function updateSummaryRowsHours() {
             console.log('=== updateSummaryRowsHours 開始 ===');
             
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.issues) {
+                console.warn('[updateSummaryRowsHours] 快取未就緒，無法更新總計行');
+                return;
+            }
+            
             // 1. 收集每個人員的工時數據
             const userHours = {};
             
             // 2. 收集每個專案的工時數據
             const projectHours = {};
             
-            // 掃描所有 ISSUE checkbox
-            const allIssueCheckboxes = document.querySelectorAll('tbody input[type="checkbox"][data-issue]:not([data-issue="-1"]):not([data-issue="-2"])');
-            
-            allIssueCheckboxes.forEach(checkbox => {
-                const userName = checkbox.getAttribute('data-user');
-                const projectName = checkbox.getAttribute('data-project');
-                const issueId = checkbox.getAttribute('data-issue');
-                const hours = parseFloat(checkbox.getAttribute('data-hours')) || 0;
-                const isChecked = checkbox.checked;
+            // 使用快取的 issues 陣列
+            cache.issues.forEach(issue => {
+                const userName = issue.user;
+                const projectName = issue.project;
+                const issueId = issue.id;
+                const hours = issue.periodHours || 0; // 使用預先計算的區間工時
+                const isChecked = issue.checkbox.checked;
                 
                 if (issueId && parseInt(issueId) > 0 && hours > 0) {
                     // 初始化人員數據
@@ -1600,7 +2895,6 @@
                         displayText = `總工時: ${data.included.toFixed(1)} 小時 (排除 ${data.excluded.toFixed(1)} 小時)`;
                     }
                     
-                    console.log(`更新專案 ${userName}/${projectName}: ${projectSpan.textContent} -> ${displayText}`);
                     projectSpan.textContent = displayText;
                 }
             }
@@ -1611,136 +2905,147 @@
             updateWorkloadCells();
         }
 
-        // 更新每日/每週/每月工作量單元格（異步版本）
+        // 更新每日/每週/每月工作量單元格（異步版本 - 使用內存快取優化）
         async function updateWorkloadCellsAsync() {
-            console.log('=== updateWorkloadCellsAsync 開始 ===');
+            const t0 = performance.now();
+            const cache = window.__WL_CACHE__;
             
-            // 獲取所有工作量單元格
-            const allWorkloadCells = document.querySelectorAll('td.workload-cell[data-period-index]');
-            console.log('找到工作量單元格數量:', allWorkloadCells.length);
+            if (!cache || !cache.workloadCells) {
+                console.warn('[updateWorkloadCellsAsync] 快取未就緒，重建快取');
+                await buildWorkloadCache();
+            }
+            
+            if (cache.DEBUG) console.log('[Cache] updateWorkloadCellsAsync 開始，使用快取的', cache.workloadCells.length, '個單元格');
             
             // 按人員和專案組織數據結構
-            const userPeriodData = {};      // 人員層級的時間段數據
-            const projectPeriodData = {};   // 專案層級的時間段數據
-            const batchSize = 200;          // 每批處理的單元格數量
+            const userPeriodData = Object.create(null);      // 人員層級的時間段數據
+            const projectPeriodData = Object.create(null);   // 專案層級的時間段數據
             
-            // 第一步：分批收集所有 ISSUE 的時間段數據
-            for (let i = 0; i < allWorkloadCells.length; i += batchSize) {
-                const endIndex = Math.min(i + batchSize, allWorkloadCells.length);
+            // 第一步：使用快取收集所有 ISSUE 的時間段數據（無 DOM 查詢）
+            const cellsToUpdate = []; // 記錄需要更新的單元格
+            
+            for (const cellObj of cache.workloadCells) {
+                const issueIdNum = parseInt(cellObj.issueId);
                 
-                for (let j = i; j < endIndex; j++) {
-                    const cell = allWorkloadCells[j];
-                    const issueId = cell.getAttribute('data-issue');
-                    const issueIdNum = parseInt(issueId);
+                // 只處理實際 ISSUE (issueId > 0)
+                if (issueIdNum > 0) {
+                    const userName = cellObj.user;
+                    const projectName = cellObj.project;
+                    const periodIndex = cellObj.periodIndex;
+                    const workload = cellObj.originalWorkload;
                     
-                    // 只處理實際 ISSUE (issueId > 0)
-                    if (issueIdNum > 0) {
-                        const userName = cell.getAttribute('data-user');
-                        const projectName = cell.getAttribute('data-project');
-                        const periodIndex = cell.getAttribute('data-period-index');
-                        const workload = parseFloat(cell.getAttribute('data-original-workload')) || 0;
+                    if (workload > 0) {
+                        // ✅ 使用快取的 checkboxByKey 取代 querySelector（關鍵優化！）
+                        const key = `${userName}|${projectName}|${cellObj.issueId}`;
+                        const checkbox = cache.checkboxByKey[key];
                         
-                        // 找到對應的 checkbox
-                        const checkbox = document.querySelector(
-                            `input[data-user="${userName}"][data-project="${projectName}"][data-issue="${issueId}"]`
-                        );
-                        
-                        if (checkbox && workload > 0) {
+                        if (checkbox) {
                             const isChecked = checkbox.checked;
-                            
-                            // 初始化人員時間段數據
-                            const userKey = userName;
-                            if (!userPeriodData[userKey]) {
-                                userPeriodData[userKey] = {};
-                            }
-                            if (!userPeriodData[userKey][periodIndex]) {
-                                userPeriodData[userKey][periodIndex] = 0;
-                            }
-                            
-                            // 初始化專案時間段數據
-                            const projectKey = `${userName}|${projectName}`;
-                            if (!projectPeriodData[projectKey]) {
-                                projectPeriodData[projectKey] = {};
-                            }
-                            if (!projectPeriodData[projectKey][periodIndex]) {
-                                projectPeriodData[projectKey][periodIndex] = 0;
-                            }
                             
                             // 只累計已勾選的 ISSUE 工作量
                             if (isChecked) {
-                                userPeriodData[userKey][periodIndex] += workload;
+                                // 初始化人員時間段數據
+                                if (!userPeriodData[userName]) {
+                                    userPeriodData[userName] = Object.create(null);
+                                }
+                                if (!userPeriodData[userName][periodIndex]) {
+                                    userPeriodData[userName][periodIndex] = 0;
+                                }
+                                userPeriodData[userName][periodIndex] += workload;
+                                
+                                // 初始化專案時間段數據
+                                const projectKey = `${userName}|${projectName}`;
+                                if (!projectPeriodData[projectKey]) {
+                                    projectPeriodData[projectKey] = Object.create(null);
+                                }
+                                if (!projectPeriodData[projectKey][periodIndex]) {
+                                    projectPeriodData[projectKey][periodIndex] = 0;
+                                }
                                 projectPeriodData[projectKey][periodIndex] += workload;
                             }
                         }
                     }
                 }
-                
-                // 每處理一批就暫停，讓 UI 有機會更新
-                if (endIndex < allWorkloadCells.length) {
-                    await new Promise(resolve => setTimeout(resolve, 5));
-                }
             }
             
-            console.log('人員時間段數據:', userPeriodData);
-            console.log('專案時間段數據:', projectPeriodData);
+            if (cache.DEBUG) {
+                console.log('[Cache] 數據收集完成，耗時:', (performance.now() - t0).toFixed(2), 'ms');
+                console.log('[Cache] 人員時間段數量:', Object.keys(userPeriodData).length);
+                console.log('[Cache] 專案時間段數量:', Object.keys(projectPeriodData).length);
+            }
             
-            // 第二步：分批更新人員總計行的工作量單元格
-            const userCells = document.querySelectorAll('td.workload-cell[data-user][data-issue="-1"][data-period-index]');
-            for (let i = 0; i < userCells.length; i += batchSize) {
-                const endIndex = Math.min(i + batchSize, userCells.length);
+            // 第二步：使用快取更新人員總計行的工作量單元格
+            const t1 = performance.now();
+            let userCellsUpdated = 0;
+            
+            for (const userName in cache.cellsByUser) {
+                const userCells = cache.cellsByUser[userName];
+                const periodData = userPeriodData[userName] || {};
                 
-                for (let j = i; j < endIndex; j++) {
-                    const cell = userCells[j];
-                    const userName = cell.getAttribute('data-user');
-                    const periodIndex = cell.getAttribute('data-period-index');
-                    
-                    const newWorkload = userPeriodData[userName] && userPeriodData[userName][periodIndex] 
-                        ? userPeriodData[userName][periodIndex] 
-                        : 0;
-                    
-                    const currentWorkload = parseFloat(cell.textContent) || 0;
-                    if (Math.abs(currentWorkload - newWorkload) > 0.01) {
-                        console.log(`更新人員 ${userName} 時段 ${periodIndex}: ${currentWorkload} -> ${newWorkload}`);
-                        cell.textContent = newWorkload.toFixed(1);
-                        updateWorkloadCellStyle(cell, newWorkload);
+                for (const cellObj of userCells) {
+                    // 只處理人員總計行 (issueId === '-1')
+                    if (cellObj.issueId === '-1') {
+                        const periodIndex = cellObj.periodIndex;
+                        const newWorkload = periodData[periodIndex] || 0;
+                        const cell = cellObj.element;
+                        const currentWorkload = parseFloat(cell.textContent) || 0;
+                        
+                        if (Math.abs(currentWorkload - newWorkload) > 0.01) {
+                            cell.textContent = newWorkload.toFixed(1);
+                            updateWorkloadCellStyle(cell, newWorkload);
+                            
+                            // 使用 CSS class 優化動畫性能
+                            cell.classList.add('cell-updated');
+                            setTimeout(() => {
+                                cell.classList.remove('cell-updated');
+                            }, 300);
+                            
+                            userCellsUpdated++;
+                        }
                     }
                 }
-                
-                if (endIndex < userCells.length) {
-                    await new Promise(resolve => setTimeout(resolve, 5));
-                }
             }
             
-            // 第三步：分批更新專案總計行的工作量單元格
-            const projectCells = document.querySelectorAll('td.workload-cell[data-user][data-project][data-issue="-2"][data-period-index]');
-            for (let i = 0; i < projectCells.length; i += batchSize) {
-                const endIndex = Math.min(i + batchSize, projectCells.length);
+            if (cache.DEBUG) {
+                console.log('[Cache] 人員總計更新完成，更新', userCellsUpdated, '個單元格，耗時:', (performance.now() - t1).toFixed(2), 'ms');
+            }
+            
+            // 第三步：使用快取更新專案總計行的工作量單元格
+            const t2 = performance.now();
+            let projectCellsUpdated = 0;
+            
+            for (const projectKey in cache.cellsByProject) {
+                const projectCells = cache.cellsByProject[projectKey];
+                const periodData = projectPeriodData[projectKey] || {};
                 
-                for (let j = i; j < endIndex; j++) {
-                    const cell = projectCells[j];
-                    const userName = cell.getAttribute('data-user');
-                    const projectName = cell.getAttribute('data-project');
-                    const periodIndex = cell.getAttribute('data-period-index');
-                    
-                    const projectKey = `${userName}|${projectName}`;
-                    const newWorkload = projectPeriodData[projectKey] && projectPeriodData[projectKey][periodIndex] 
-                        ? projectPeriodData[projectKey][periodIndex] 
-                        : 0;
-                    
-                    const currentWorkload = parseFloat(cell.textContent) || 0;
-                    if (Math.abs(currentWorkload - newWorkload) > 0.01) {
-                        console.log(`更新專案 ${userName}/${projectName} 時段 ${periodIndex}: ${currentWorkload} -> ${newWorkload}`);
-                        cell.textContent = newWorkload.toFixed(1);
-                        updateWorkloadCellStyle(cell, newWorkload);
+                for (const cellObj of projectCells) {
+                    // 只處理專案總計行 (issueId === '-2')
+                    if (cellObj.issueId === '-2') {
+                        const periodIndex = cellObj.periodIndex;
+                        const newWorkload = periodData[periodIndex] || 0;
+                        const cell = cellObj.element;
+                        const currentWorkload = parseFloat(cell.textContent) || 0;
+                        
+                        if (Math.abs(currentWorkload - newWorkload) > 0.01) {
+                            cell.textContent = newWorkload.toFixed(1);
+                            updateWorkloadCellStyle(cell, newWorkload);
+                            
+                            // 使用 CSS class 優化動畫性能
+                            cell.classList.add('cell-updated');
+                            setTimeout(() => {
+                                cell.classList.remove('cell-updated');
+                            }, 300);
+                            
+                            projectCellsUpdated++;
+                        }
                     }
                 }
-                
-                if (endIndex < projectCells.length) {
-                    await new Promise(resolve => setTimeout(resolve, 5));
-                }
             }
             
-            console.log('=== updateWorkloadCellsAsync 完成 ===');
+            if (cache.DEBUG) {
+                console.log('[Cache] 專案總計更新完成，更新', projectCellsUpdated, '個單元格，耗時:', (performance.now() - t2).toFixed(2), 'ms');
+                console.log('[Cache] updateWorkloadCellsAsync 總耗時:', (performance.now() - t0).toFixed(2), 'ms');
+            }
         }
 
         // 更新每日/每週/每月工作量單元格
@@ -1816,9 +3121,7 @@
                     );
                     
                     if (cell) {
-                        const oldValue = cell.textContent;
                         const newValue = workload.toFixed(1);
-                        console.log(`更新人員 ${userName} 時段 ${periodIndex}: ${oldValue} -> ${newValue}`);
                         
                         // 更新文字內容
                         cell.textContent = newValue;
@@ -1841,9 +3144,7 @@
                     );
                     
                     if (cell) {
-                        const oldValue = cell.textContent;
                         const newValue = workload.toFixed(1);
-                        console.log(`更新專案 ${userName}/${projectName} 時段 ${periodIndex}: ${oldValue} -> ${newValue}`);
                         
                         // 更新文字內容
                         cell.textContent = newValue;
@@ -1860,13 +3161,15 @@
         // 更新工作量單元格的樣式類別
         function updateWorkloadCellStyle(cell, workload) {
             // 移除舊的樣式類別
-            cell.classList.remove('workload-zero', 'workload-normal', 'workload-high', 'workload-overdue');
+            cell.classList.remove('workload-zero', 'workload-normal', 'workload-medium', 'workload-high', 'workload-overdue');
             
             // 根據工作量添加新的樣式類別
             if (workload === 0) {
                 cell.classList.add('workload-zero');
             } else if (workload >= 8.0) {
                 cell.classList.add('workload-high');
+            } else if (workload > 5.0) {
+                cell.classList.add('workload-medium');
             } else {
                 cell.classList.add('workload-normal');
             }
@@ -1883,12 +3186,21 @@
             }
         }
 
-        // 全選/全不選功能
+        // 全選/全不選功能（優化版：立即回應 UI + Loading 效果）
         function toggleSelectAll(selectAllCheckbox) {
-            const allCheckboxes = document.querySelectorAll('tbody input[type="checkbox"]');
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.allCheckboxes) {
+                console.warn('[toggleSelectAll] 快取未就緒，無法全選/全不選');
+                return;
+            }
+            
+            const allCheckboxes = cache.allCheckboxes;
             const newState = selectAllCheckbox.checked;
             
-            // 批量更新所有 checkbox 狀態
+            // 如果項目數量很多，使用 selectAll 理由觸發適當的 Loading
+            const reason = allCheckboxes.length > 100 ? 'selectAll' : 'batch';
+            
+            // 批量同步更新所有 checkbox 狀態（立即視覺反饋）
             allCheckboxes.forEach(checkbox => {
                 if (checkbox.checked !== newState) {
                     checkbox.checked = newState;
@@ -1896,8 +3208,8 @@
                 }
             });
             
-            // 一次性重新計算統計
-            updateCostStatistics();
+            // 排程重算（根據項目數量選擇適當的理由）
+            scheduleCostAndSummaryRecalc(reason);
         }
 
         // 更新全選按鈕的狀態
@@ -1905,13 +3217,23 @@
             const selectAllCheckbox = document.getElementById('selectAll');
             if (!selectAllCheckbox) return;
             
-            const allCheckboxes = document.querySelectorAll('tbody input[type="checkbox"]');
-            const checkedCheckboxes = document.querySelectorAll('tbody input[type="checkbox"]:checked');
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.allCheckboxes) {
+                console.warn('[updateSelectAllState] 快取未就緒，無法更新全選狀態');
+                return;
+            }
             
-            if (checkedCheckboxes.length === 0) {
+            const allCheckboxes = cache.allCheckboxes;
+            let checkedCount = 0;
+            
+            allCheckboxes.forEach(cb => {
+                if (cb.checked) checkedCount++;
+            });
+            
+            if (checkedCount === 0) {
                 selectAllCheckbox.checked = false;
                 selectAllCheckbox.indeterminate = false;
-            } else if (checkedCheckboxes.length === allCheckboxes.length) {
+            } else if (checkedCount === allCheckboxes.length) {
                 selectAllCheckbox.checked = true;
                 selectAllCheckbox.indeterminate = false;
             } else {
@@ -1922,17 +3244,24 @@
 
         // 初始化成本計算統計
         function initializeCostCalculation() {
-            // 第一次載入時計算初始統計
-            updateCostStatistics();
+            console.log('成本計算初始化...');
+            // 第一次載入時立即計算初始統計
+            updateCostStatistics(true); // immediate=true
+            console.log('成本計算初始化完成');
         }
 
         // 測試函數 - 可在瀏覽器控制台呼叫來測試
         function testCostCalculation() {
             console.log('=== 測試成本計算功能 ===');
-            const checkboxes = document.querySelectorAll('tbody input[type="checkbox"]');
-            console.log('找到 checkbox 數量:', checkboxes.length);
+            const cache = window.__WL_CACHE__;
+            if (!cache || !cache.allCheckboxes) {
+                console.warn('快取未就緒，無法測試');
+                return;
+            }
             
-            checkboxes.forEach((checkbox, index) => {
+            console.log('找到 checkbox 數量:', cache.allCheckboxes.length);
+            
+            cache.allCheckboxes.forEach((checkbox, index) => {
                 console.log(`Checkbox ${index}:`, {
                     issue: checkbox.getAttribute('data-issue'),
                     hours: checkbox.getAttribute('data-hours'),
@@ -1944,62 +3273,139 @@
             updateCostStatistics();
         }
 
-        // 頁面載入完成後初始化成本計算
-        document.addEventListener('DOMContentLoaded', function() {
-            // 簡單延遲確保 DOM 完全準備好
-            setTimeout(function() {
-                calculatePeriodHours();
-                initializeCostCalculation();
-            }, 50);
-        });
-
-        // 計算區間工時並更新 data-hours 屬性（異步版本）
+        // 計算區間工時並更新 data-hours 屬性（異步版本）- ✅ 優化：使用快取
         async function calculatePeriodHoursAsync() {
-            console.log('=== 開始計算區間工時（異步版本） ===');
+            console.log('=== 開始計算區間工時（使用快取） ===');
             
-            // 獲取所有工作量單元格
-            const allWorkloadCells = document.querySelectorAll('td.workload-cell[data-period-index]');
+            const cache = window.__WL_CACHE__;
             const issueHours = {}; // 儲存每個議題的區間工時
+            const userAgg = Object.create(null);
+            const projectAgg = Object.create(null);
+            const tStart = performance.now();
+            const totalIssues = cache && cache.issues ? cache.issues.length : 0;
+            const loadingSub = document.getElementById('loadingSubtext');
+            const progressBar = document.getElementById('progressBar');
             
-            // 計算每個議題的區間工時
-            allWorkloadCells.forEach(cell => {
-                const issueId = cell.getAttribute('data-issue');
-                const issueIdNum = parseInt(issueId);
+            if (cache && cache.issues && cache.cellsByIssue) {
+                // ✅ 使用快取：直接從 cache.issues 遍歷
+                console.log(`使用快取處理 ${cache.issues.length} 個議題`);
                 
-                // 只處理實際議題 (issueId > 0)
-                if (issueIdNum > 0) {
-                    const workload = parseFloat(cell.getAttribute('data-original-workload')) || 0;
-                    
-                    if (!issueHours[issueId]) {
-                        issueHours[issueId] = 0;
+                let processed = 0;
+                for (const issue of cache.issues) {
+                    const issueId = issue.issueId;
+                    if (!issueHours[issueId]) issueHours[issueId] = 0;
+                    const cells = cache.cellsByIssue[issueId] || [];
+                    let sum = 0;
+                    for (const cellObj of cells) {
+                        const workload = typeof cellObj.originalWorkload === 'number' ? cellObj.originalWorkload : (cellObj.element ? (parseFloat(cellObj.element.getAttribute('data-original-workload')) || 0) : 0);
+                        if (!isNaN(workload)) sum += workload;
                     }
-                    issueHours[issueId] += workload;
+                    issueHours[issueId] = sum;
+                    // 聚合使用者/專案
+                    const userName = issue.user;
+                    const projectName = issue.project;
+                    if (!userAgg[userName]) userAgg[userName] = 0;
+                    if (!projectAgg[userName+'|'+projectName]) projectAgg[userName+'|'+projectName] = 0;
+                    userAgg[userName] += sum;
+                    projectAgg[userName+'|'+projectName] += sum;
+
+                    // 動態更新 Loading 顯示：目前處理到哪個使用者
+                    processed++;
+                    if (loadingSub && processed % 50 === 0) { // 每 50 筆刷新一次避免過度重排
+                        const percent = ((processed / totalIssues) * 100).toFixed(1);
+                        // 只更新進度百分比，附加到現有文字後面（保留 buildWorkloadCache 設定的使用者名稱）
+                        const baseText = loadingSub.textContent.replace(/ \(\d+\/\d+\)$/, ''); // 移除舊的進度
+                        loadingSub.textContent = `${baseText} (${processed}/${totalIssues})`;
+                        if (progressBar) progressBar.style.width = percent + '%';
+                        // 釋放主執行緒，避免卡頓
+                        await new Promise(r => requestAnimationFrame(r));
+                    }
                 }
-            });
-            
-            console.log('議題區間工時:', issueHours);
-            
-            // 更新每個議題的 data-hours 屬性
-            Object.keys(issueHours).forEach(issueId => {
-                const periodHours = issueHours[issueId];
-                const checkbox = document.querySelector(`input[data-issue="${issueId}"]`);
+            } else {
+                // 回退方案：使用 DOM 查詢（較慢）
+                console.warn('快取未準備好，使用 DOM 查詢（較慢）');
+                const allWorkloadCells = document.querySelectorAll('td.workload-cell[data-period-index]');
+                console.log(`開始處理 ${allWorkloadCells.length} 個工作量單元格`);
                 
-                if (checkbox) {
-                    console.log(`更新議題 #${issueId} 的工時: ${checkbox.getAttribute('data-hours')} -> ${periodHours.toFixed(1)}`);
-                    checkbox.setAttribute('data-hours', periodHours.toFixed(1));
-                }
-                
-                // 更新議題詳細顯示
-                const periodHoursSpan = document.getElementById(`period-hours-${issueId}`);
-                if (periodHoursSpan) {
-                    periodHoursSpan.textContent = `區間: ${periodHours.toFixed(1)} 小時`;
-                }
-            });
+                allWorkloadCells.forEach(cell => {
+                    const issueId = cell.getAttribute('data-issue');
+                    const issueIdNum = parseInt(issueId);
+                    
+                    // 只處理實際議題 (issueId > 0)
+                    if (issueIdNum > 0) {
+                        const workload = parseFloat(cell.getAttribute('data-original-workload')) || 0;
+                        
+                        if (!issueHours[issueId]) {
+                            issueHours[issueId] = 0;
+                        }
+                        issueHours[issueId] += workload;
+                    }
+                });
+            }
             
-            // 計算並更新人員和專案的區間工時
-            updateUserAndProjectPeriodHours(issueHours);
+            console.log(`議題區間工時: ${Object.keys(issueHours).length} 個議題已計算`);
             
-            console.log('=== 區間工時計算完成（異步版本） ===');
+            // 計算總工時
+            let totalCalculatedHours = 0;
+            Object.values(issueHours).forEach(h => totalCalculatedHours += h);
+            console.log(`議題總工時: ${totalCalculatedHours.toFixed(1)} hrs`);
+            
+            // ✅ 優化：更新每個議題的 data-hours 屬性（使用快取）
+            const issueIds = Object.keys(issueHours);
+            
+            if (cache && cache.issueCheckboxes) {
+                // 使用快取更新（快速）
+                let updatedCount = 0;
+                issueIds.forEach(issueId => {
+                    const periodHours = issueHours[issueId];
+                    const checkbox = cache.issueCheckboxes[issueId];
+                    
+                    if (checkbox) {
+                        checkbox.setAttribute('data-hours', periodHours.toFixed(1));
+                        updatedCount++;
+                    }
+                    
+                    // 更新議題詳細顯示
+                    const periodHoursSpan = document.getElementById(`period-hours-${issueId}`);
+                    if (periodHoursSpan) {
+                        periodHoursSpan.textContent = `區間: ${periodHours.toFixed(1)} 小時`;
+                    }
+                });
+                console.log(`已更新 ${updatedCount} 個議題的 data-hours 屬性`);
+            } else {
+                // 回退方案：DOM 查詢（較慢）
+                console.warn('快取中沒有 issueCheckboxes，使用 DOM 查詢');
+                issueIds.forEach(issueId => {
+                    const periodHours = issueHours[issueId];
+                    const checkbox = document.querySelector(`input[data-issue="${issueId}"]`);
+                    
+                    if (checkbox) {
+                        checkbox.setAttribute('data-hours', periodHours.toFixed(1));
+                    }
+                    
+                    // 更新議題詳細顯示
+                    const periodHoursSpan = document.getElementById(`period-hours-${issueId}`);
+                    if (periodHoursSpan) {
+                        periodHoursSpan.textContent = `區間: ${periodHours.toFixed(1)} 小時`;
+                    }
+                });
+            }
+            
+            // 直接更新人員和專案 checkbox data-hours（避免後續再掃）
+            for (const userName in userAgg) {
+                const total = userAgg[userName];
+                const userObj = cache.users[userName];
+                if (userObj && userObj.checkbox) userObj.checkbox.setAttribute('data-hours', total.toFixed(1));
+                if (userObj && userObj.span) userObj.span.setAttribute('data-original-hours', total.toFixed(1));
+            }
+            for (const key in projectAgg) {
+                const total = projectAgg[key];
+                const projectObj = cache.projects[key];
+                if (projectObj && projectObj.checkbox) projectObj.checkbox.setAttribute('data-hours', total.toFixed(1));
+                if (projectObj && projectObj.span) projectObj.span.setAttribute('data-original-hours', total.toFixed(1));
+            }
+            cache.periodHoursReady = true;
+            if (cache.DEBUG) console.log('[Perf] calculatePeriodHoursAsync ms=', (performance.now()-tStart).toFixed(2));
         }
 
         // 計算單個議題在當前設定區間內的實際工時
@@ -2044,7 +3450,7 @@
                 }
             });
             
-            console.log('議題區間工時:', issueHours);
+            console.log(`議題區間工時: ${Object.keys(issueHours).length} 個議題已計算`);
             
             // 更新每個議題的 data-hours 屬性
             Object.keys(issueHours).forEach(issueId => {
@@ -2052,7 +3458,6 @@
                 const checkbox = document.querySelector(`input[data-issue="${issueId}"]`);
                 
                 if (checkbox) {
-                    console.log(`更新議題 #${issueId} 的工時: ${checkbox.getAttribute('data-hours')} -> ${periodHours.toFixed(1)}`);
                     checkbox.setAttribute('data-hours', periodHours.toFixed(1));
                 }
                 
@@ -2065,8 +3470,6 @@
             
             // 計算並更新人員和專案的區間工時
             updateUserAndProjectPeriodHours(issueHours);
-            
-            console.log('=== 區間工時計算完成 ===');
         }
 
         // 更新人員和專案的區間工時
@@ -2101,7 +3504,6 @@
             Object.keys(userHours).forEach(userName => {
                 const userCheckbox = document.querySelector(`input[data-user="${userName}"][data-issue="-1"]`);
                 if (userCheckbox) {
-                    console.log(`更新人員 ${userName} 的工時: ${userCheckbox.getAttribute('data-hours')} -> ${userHours[userName].toFixed(1)}`);
                     userCheckbox.setAttribute('data-hours', userHours[userName].toFixed(1));
                 }
                 
@@ -2117,7 +3519,6 @@
                 const [userName, projectName] = projectKey.split('|');
                 const projectCheckbox = document.querySelector(`input[data-user="${userName}"][data-project="${projectName}"][data-issue="-2"]`);
                 if (projectCheckbox) {
-                    console.log(`更新專案 ${userName}/${projectName} 的工時: ${projectCheckbox.getAttribute('data-hours')} -> ${projectHours[projectKey].toFixed(1)}`);
                     projectCheckbox.setAttribute('data-hours', projectHours[projectKey].toFixed(1));
                 }
                 
@@ -2128,6 +3529,717 @@
                 }
             });
         }
+
+        // === 圖表相關功能 ===
+        
+        // ⚡ 性能優化：全局禁用 Chart.js 動畫（節省 4+ 秒）
+        if (typeof Chart !== 'undefined') {
+            Chart.defaults.animation = false;
+            Chart.defaults.animations = false;
+            Chart.defaults.transitions = false;
+            console.log('[Chart] 動畫已全局禁用（性能優化）');
+        }
+        
+        let userHoursChart = null;
+        let projectHoursChart = null;
+        let workloadTrendChart = null;
+        let workloadHeatmapChart = null;
+
+        // 初始化所有圖表（改為異步以確保完成後才隱藏 Loading）
+        async function initializeCharts() {
+            const t0 = performance.now();
+            console.log('=== 初始化圖表 ===');
+            
+            // 確保有數據才初始化圖表
+            const hasData = document.querySelector('tbody tr[data-level="0"]');
+            if (!hasData) {
+                console.log('沒有數據，跳過圖表初始化');
+                return;
+            }
+            
+            try {
+                // 同步創建所有圖表
+                const results = [
+                    createUserHoursChart(),
+                    createProjectHoursChart(),
+                    createWorkloadTrendChart(),
+                    createWorkloadHeatmapChart()
+                ];
+                
+                const successCount = results.filter(r => r).length;
+                const t1 = performance.now();
+                const duration = (t1 - t0).toFixed(2);
+                
+                console.log(`[Chart] 圖表初始化完成: ${successCount}/4 個圖表`);
+                
+            } catch (error) {
+                console.error('[Chart] 圖表初始化出錯:', error);
+            }
+        }
+
+        // 人員工時分佈圓餅圖
+        function createUserHoursChart() {
+            const ctx = document.getElementById('userHoursChart');
+            if (!ctx) return false;
+
+            const userHoursData = collectUserHoursData();
+            
+            if (userHoursChart) {
+                userHoursChart.destroy();
+            }
+
+            userHoursChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: userHoursData.users,
+                    datasets: [{
+                        data: userHoursData.hours,
+                        backgroundColor: [
+                            '#667eea', '#764ba2', '#f093fb', '#f5576c',
+                            '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
+                            '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    animation: false,  // ⚡ 禁用動畫
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.raw / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.raw} 小時 (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            return true;
+        }
+
+        // 專案工時分佈長條圖
+        function createProjectHoursChart() {
+            const ctx = document.getElementById('projectHoursChart');
+            if (!ctx) return false;
+
+            const projectHoursData = collectProjectHoursData();
+            
+            if (projectHoursChart) {
+                projectHoursChart.destroy();
+            }
+
+            projectHoursChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: projectHoursData.projects,
+                    datasets: [{
+                        label: '專案工時',
+                        data: projectHoursData.hours,
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    animation: false,  // ⚡ 禁用動畫
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.raw} 小時`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '工時 (小時)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '專案名稱'
+                            },
+                            ticks: {
+                                maxRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+            return true;
+        }
+
+        // 工時趨勢折線圖
+        function createWorkloadTrendChart() {
+            const ctx = document.getElementById('workloadTrendChart');
+            if (!ctx) {
+                console.error('[Chart] workloadTrendChart canvas 元素不存在');
+                return false;
+            }
+
+            const trendData = collectWorkloadTrendData();
+            
+            // 檢查數據有效性
+            if (!trendData || !trendData.periods || !trendData.users || trendData.users.length === 0) {
+                console.warn('[Chart] 工時趨勢圖表無數據', trendData);
+                return false;
+            }
+            
+            if (workloadTrendChart) {
+                workloadTrendChart.destroy();
+            }
+
+            workloadTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trendData.periods,
+                    datasets: trendData.users.map((user, index) => ({
+                        label: user.name,
+                        data: user.workloads,
+                        borderColor: [
+                            '#667eea', '#764ba2', '#f093fb', '#f5576c',
+                            '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'
+                        ][index % 8],
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)', 
+                            'rgba(240, 147, 251, 0.1)', 'rgba(245, 87, 108, 0.1)',
+                            'rgba(79, 172, 254, 0.1)', 'rgba(0, 242, 254, 0.1)', 
+                            'rgba(67, 233, 123, 0.1)', 'rgba(56, 249, 215, 0.1)'
+                        ][index % 8],
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4
+                    }))
+                },
+                options: {
+                    animation: false,  // ⚡ 禁用動畫
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '工作負載 (小時)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '時間週期'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+            
+            console.log(`[Chart] ✅ 工時趨勢圖表已創建`);
+            return true;
+        }
+
+        // 工作負載熱力圖（使用長條圖模擬）
+        function createWorkloadHeatmapChart() {
+            const ctx = document.getElementById('workloadHeatmapChart');
+            if (!ctx) {
+                console.error('[Chart] workloadHeatmapChart canvas 元素不存在');
+                return false;
+            }
+
+            const heatmapData = collectWorkloadHeatmapData();
+            
+            // 檢查數據有效性
+            if (!heatmapData || !heatmapData.periods || !heatmapData.users || heatmapData.users.length === 0) {
+                console.warn('[Chart] 工作負載熱力圖無數據', heatmapData);
+                return false;
+            }
+            
+            if (workloadHeatmapChart) {
+                workloadHeatmapChart.destroy();
+            }
+
+            workloadHeatmapChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: heatmapData.periods,
+                    datasets: heatmapData.users.map((user, index) => ({
+                        label: user.name,
+                        data: user.workloads,
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.8)', 'rgba(118, 75, 162, 0.8)', 
+                            'rgba(240, 147, 251, 0.8)', 'rgba(245, 87, 108, 0.8)',
+                            'rgba(79, 172, 254, 0.8)', 'rgba(0, 242, 254, 0.8)', 
+                            'rgba(67, 233, 123, 0.8)', 'rgba(56, 249, 215, 0.8)'
+                        ][index % 8],
+                        borderColor: [
+                            '#667eea', '#764ba2', '#f093fb', '#f5576c',
+                            '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'
+                        ][index % 8],
+                        borderWidth: 1
+                    }))
+                },
+                options: {
+                    animation: false,  // ⚡ 禁用動畫
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            title: {
+                                display: true,
+                                text: '時間週期'
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '累計工作負載 (小時)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            console.log(`[Chart] ✅ 工作負載熱力圖已創建`);
+            return true;
+        }
+
+        // 收集人員工時數據（優化：使用內存快取）
+        function collectUserHoursData() {
+            const t0 = performance.now();
+            const cache = window.__WL_CACHE__;
+            
+            // 回退方案：如果快取未初始化
+            if (!cache) {
+                console.warn('[Chart] Cache 未初始化，使用 DOM 查詢（較慢）');
+                return collectUserHoursDataFallback();
+            }
+            
+            const userHours = {};
+            
+            // ✅ 優化：直接從快取讀取（O(n)，n = 用戶數量）
+            for (const userName in cache.users) {
+                const userObj = cache.users[userName];
+                if (userObj.checkbox && userObj.checkbox.checked) {
+                    const hours = parseFloat(userObj.checkbox.getAttribute('data-hours')) || 0;
+                    if (hours > 0) {
+                        userHours[userName] = hours;
+                    }
+                }
+            }
+            
+            if (cache.DEBUG) {
+                console.log(`[Perf] collectUserHoursData: ${(performance.now()-t0).toFixed(2)}ms (使用快取)`);
+            }
+            
+            return {
+                users: Object.keys(userHours),
+                hours: Object.values(userHours)
+            };
+        }
+        
+        // 回退方案：使用 DOM 查詢
+        function collectUserHoursDataFallback() {
+            const userHours = {};
+            const userRows = document.querySelectorAll('tbody tr[data-level="0"]');
+            userRows.forEach(row => {
+                const userName = row.getAttribute('data-user');
+                const checkbox = row.querySelector('input[data-issue="-1"]');
+                if (checkbox && checkbox.checked) {
+                    const hours = parseFloat(checkbox.getAttribute('data-hours')) || 0;
+                    if (hours > 0) {
+                        userHours[userName] = hours;
+                    }
+                }
+            });
+            return {
+                users: Object.keys(userHours),
+                hours: Object.values(userHours)
+            };
+        }
+
+        // 收集專案工時數據（優化：使用內存快取）
+        function collectProjectHoursData() {
+            const t0 = performance.now();
+            const cache = window.__WL_CACHE__;
+            
+            // 回退方案：如果快取未初始化
+            if (!cache) {
+                console.warn('[Chart] Cache 未初始化，使用 DOM 查詢（較慢）');
+                return collectProjectHoursDataFallback();
+            }
+            
+            const projectHours = {};
+            
+            // ✅ 優化：直接從快取讀取（O(n)，n = 專案數量）
+            for (const projectKey in cache.projects) {
+                const projectObj = cache.projects[projectKey];
+                if (projectObj.checkbox && projectObj.checkbox.checked) {
+                    const hours = parseFloat(projectObj.checkbox.getAttribute('data-hours')) || 0;
+                    if (hours > 0) {
+                        const projectName = projectObj.project;
+                        if (!projectHours[projectName]) {
+                            projectHours[projectName] = 0;
+                        }
+                        projectHours[projectName] += hours;
+                    }
+                }
+            }
+            
+            if (cache.DEBUG) {
+                console.log(`[Perf] collectProjectHoursData: ${(performance.now()-t0).toFixed(2)}ms (使用快取)`);
+            }
+            
+            return {
+                projects: Object.keys(projectHours),
+                hours: Object.values(projectHours)
+            };
+        }
+        
+        // 回退方案：使用 DOM 查詢
+        function collectProjectHoursDataFallback() {
+            const projectHours = {};
+            const projectRows = document.querySelectorAll('tbody tr[data-level="1"]');
+            projectRows.forEach(row => {
+                const projectName = row.getAttribute('data-project');
+                const checkbox = row.querySelector('input[data-issue="-2"]');
+                if (checkbox && checkbox.checked) {
+                    const hours = parseFloat(checkbox.getAttribute('data-hours')) || 0;
+                    if (hours > 0) {
+                        if (!projectHours[projectName]) {
+                            projectHours[projectName] = 0;
+                        }
+                        projectHours[projectName] += hours;
+                    }
+                }
+            });
+            return {
+                projects: Object.keys(projectHours),
+                hours: Object.values(projectHours)
+            };
+        }
+
+        // 收集工時趨勢數據（使用快取）: 只納入目前勾選的 ISSUE，過濾全零使用者
+        function collectWorkloadTrendData() {
+            const cache = window.__WL_CACHE__;
+            
+            // 回退方案：如果快取未初始化
+            if (!cache) {
+                console.warn('[Chart] Cache 未初始化，使用 DOM 查詢（較慢）');
+                return collectWorkloadTrendDataFallback();
+            }
+            
+            if (!cache.issues || cache.issues.length === 0) {
+                console.warn('[Chart] 快取中沒有議題數據');
+                return { periods: [], users: [] };
+            }
+            
+            const userWorkloads = {};
+            let periods = [];
+            let periodCount = 0;
+
+            // 取得或建立 period 標籤（優先使用表頭 th.date-header 文字）
+            if (!cache.periodLabels) {
+                const headerThs = document.querySelectorAll('thead tr:last-child th.date-header');
+                const labels = [];
+                headerThs.forEach(th => {
+                    const txt = th.textContent.trim();
+                    if (txt) labels.push(txt);
+                });
+                cache.periodLabels = labels.length > 0 ? labels : null;
+            }
+
+            if (cache.periodLabels && cache.periodLabels.length > 0) {
+                periods = cache.periodLabels.slice();
+                periodCount = periods.length;
+            } else if (cache.issues.length > 0) {
+                // 後備：根據第一個議題的 cell 數決定週期數
+                const firstIssue = cache.issues[0];
+                const firstCells = cache.cellsByIssue[firstIssue.issueId] || [];
+                firstCells.forEach(cellObj => {
+                    const idx = parseInt(cellObj.periodIndex);
+                    if (!isNaN(idx)) periodCount = Math.max(periodCount, idx + 1);
+                });
+                periods = Array.from({length: periodCount}, (_, i) => `P${i+1}`);
+                cache.periodLabels = periods.slice();
+            }
+
+            // 僅統計勾選中的議題
+            for (const issue of cache.issues) {
+                if (!issue.checkbox || !issue.checkbox.checked) continue;
+                const userName = issue.user;
+                if (!userWorkloads[userName]) userWorkloads[userName] = new Array(periodCount).fill(0);
+                const cells = cache.cellsByIssue[issue.issueId] || [];
+                for (const cellObj of cells) {
+                    const periodIndex = parseInt(cellObj.periodIndex);
+                    if (isNaN(periodIndex) || periodIndex < 0 || periodIndex >= periodCount) continue;
+                    const workload = typeof cellObj.originalWorkload === 'number' ? cellObj.originalWorkload : 0;
+                    if (workload > 0) userWorkloads[userName][periodIndex] += workload;
+                }
+            }
+
+            // 過濾掉全 0 的使用者
+            const users = Object.keys(userWorkloads).filter(u => {
+                return userWorkloads[u].some(v => v > 0);
+            }).map(userName => ({ name: userName, workloads: userWorkloads[userName] }));
+            
+            console.log(`[Chart] 趨勢數據: ${users.length} 位人員, ${periods.length} 個週期`);
+            
+            return { periods, users };
+        }
+        
+        // 回退方案：使用 DOM 查詢
+        function collectWorkloadTrendDataFallback() {
+            const userWorkloads = {};
+            const periods = [];
+            
+            const headerCells = document.querySelectorAll('thead tr:last-child th');
+            headerCells.forEach((cell, index) => {
+                if (index > 0) {
+                    const text = cell.textContent.trim();
+                    if (text && !text.includes('資訊')) {
+                        periods.push(text);
+                    }
+                }
+            });
+            
+            const issueRows = document.querySelectorAll('tbody tr[data-level="2"]');
+            issueRows.forEach(row => {
+                const userName = row.getAttribute('data-user');
+                
+                // 圖表顯示「所有」ISSUE，不受勾選狀態影響
+                if (!userWorkloads[userName]) {
+                    userWorkloads[userName] = new Array(periods.length).fill(0);
+                }
+                
+                const workloadCells = row.querySelectorAll('td.workload-cell');
+                workloadCells.forEach((cell, index) => {
+                    const workload = parseFloat(cell.getAttribute('data-original-workload')) || 0;
+                    if (index < userWorkloads[userName].length) {
+                        userWorkloads[userName][index] += workload;
+                    }
+                });
+            });
+            
+            const users = Object.keys(userWorkloads).map(userName => ({
+                name: userName,
+                workloads: userWorkloads[userName]
+            }));
+            
+            return { periods, users };
+        }
+
+        // 收集工作負載熱力圖數據
+        function collectWorkloadHeatmapData() {
+            // 重用趨勢數據，但以堆疊方式呈現
+            return collectWorkloadTrendData();
+        }
+
+        // 更新所有圖表（當數據變化時調用）
+        function updateCharts() {
+            console.log('=== 更新圖表 ===');
+            
+            // 延遲更新以確保 DOM 已更新
+            setTimeout(() => {
+                try {
+                    if (userHoursChart) {
+                        const userData = collectUserHoursData();
+                        userHoursChart.data.labels = userData.users;
+                        userHoursChart.data.datasets[0].data = userData.hours;
+                        userHoursChart.update();
+                    }
+                    
+                    if (projectHoursChart) {
+                        const projectData = collectProjectHoursData();
+                        projectHoursChart.data.labels = projectData.projects;
+                        projectHoursChart.data.datasets[0].data = projectData.hours;
+                        projectHoursChart.update();
+                    }
+                    
+                    if (workloadTrendChart) {
+                        const trendData = collectWorkloadTrendData();
+                        workloadTrendChart.data.labels = trendData.periods;
+                        workloadTrendChart.data.datasets = trendData.users.map((user, index) => ({
+                            label: user.name,
+                            data: user.workloads,
+                            borderColor: [
+                                '#667eea', '#764ba2', '#f093fb', '#f5576c',
+                                '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'
+                            ][index % 8],
+                            backgroundColor: [
+                                'rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)', 
+                                'rgba(240, 147, 251, 0.1)', 'rgba(245, 87, 108, 0.1)',
+                                'rgba(79, 172, 254, 0.1)', 'rgba(0, 242, 254, 0.1)', 
+                                'rgba(67, 233, 123, 0.1)', 'rgba(56, 249, 215, 0.1)'
+                            ][index % 8],
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4
+                        }));
+                        workloadTrendChart.update();
+                    }
+                    
+                    if (workloadHeatmapChart) {
+                        const heatmapData = collectWorkloadHeatmapData();
+                        workloadHeatmapChart.data.labels = heatmapData.periods;
+                        workloadHeatmapChart.data.datasets = heatmapData.users.map((user, index) => ({
+                            label: user.name,
+                            data: user.workloads,
+                            backgroundColor: [
+                                'rgba(102, 126, 234, 0.8)', 'rgba(118, 75, 162, 0.8)', 
+                                'rgba(240, 147, 251, 0.8)', 'rgba(245, 87, 108, 0.8)',
+                                'rgba(79, 172, 254, 0.8)', 'rgba(0, 242, 254, 0.8)', 
+                                'rgba(67, 233, 123, 0.8)', 'rgba(56, 249, 215, 0.8)'
+                            ][index % 8],
+                            borderColor: [
+                                '#667eea', '#764ba2', '#f093fb', '#f5576c',
+                                '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'
+                            ][index % 8],
+                            borderWidth: 1
+                        }));
+                        workloadHeatmapChart.update();
+                    }
+                    
+                    console.log('圖表更新完成');
+                } catch (error) {
+                    console.error('圖表更新出錯:', error);
+                }
+            }, 100);
+        }
+
+        // === 篩選表單相關功能 ===
+        
+        // 載入使用者列表
+        async function loadUsers() {
+            const groupName = document.getElementById('groupName').value;
+            const userSelect = document.getElementById('userFullname');
+            
+            // 保存當前選中的使用者
+            const currentSelected = Array.from(userSelect.selectedOptions).map(option => option.value);
+            
+            // 清空現有選項，保留全部成員選項
+            userSelect.innerHTML = '<option value="">🏢 全部成員 (整個部門)</option>';
+            
+            if (!groupName) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/users/${encodeURIComponent(groupName)}`);
+                if (response.ok) {
+                    const users = await response.json();
+                    users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user;
+                        option.textContent = user;
+                        // 如果之前已選中，維持選中狀態
+                        if (currentSelected.includes(user)) {
+                            option.selected = true;
+                        }
+                        userSelect.appendChild(option);
+                    });
+                } else {
+                    console.error('載入使用者失敗:', response.status);
+                }
+            } catch (error) {
+                console.error('載入使用者時發生錯誤:', error);
+            }
+        }
+        
+        // 重置表單
+        function resetForm() {
+            if (confirm('確定要重置所有篩選條件嗎？')) {
+                document.getElementById('workload2dForm').reset();
+                document.getElementById('userFullname').innerHTML = '<option value="">🏢 全部成員 (整個部門)</option>';
+            }
+        }
+        
+        // 表單提交驗證
+        document.getElementById('workload2dForm').addEventListener('submit', function(e) {
+            const groupName = document.getElementById('groupName').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!groupName || !startDate || !endDate) {
+                e.preventDefault();
+                alert('請填寫所有必填欄位！');
+                return false;
+            }
+            
+            if (new Date(startDate) > new Date(endDate)) {
+                e.preventDefault();
+                alert('開始日期不能晚於結束日期！');
+                return false;
+            }
+            
+            // 顯示載入動畫
+            if (window.__WL_CONFIG__ && window.__WL_CONFIG__.enableLoadingOverlay) {
+                showLoading('重新分析中...', '正在載入新的分析結果');
+            }
+        });
+        
+        // 頁面載入完成後初始化使用者列表（與現有初始化整合）
+        function initializeUserSelect() {
+            const groupSelect = document.getElementById('groupName');
+            if (groupSelect && groupSelect.value) {
+                loadUsers();
+            }
+        }
+        
+        // 在統一的頁面初始化中加入使用者選單初始化
+        const originalInitializePage = initializePage;
+        initializePage = function() {
+            originalInitializePage();
+            // 初始化使用者選單
+            setTimeout(initializeUserSelect, 100);
+        };
     </script>
 </body>
 </html>

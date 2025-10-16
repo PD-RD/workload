@@ -42,6 +42,8 @@ public class WorkloadRepository {
         "WHERE " +
         "    g.lastname = ? " +
         "    AND CONCAT(u.lastname, u.firstname) = ? " +
+        "    AND u.status = 1 " +
+        "    AND g.status = 1 " +
         "    AND i.start_date IS NOT NULL " +
         "    AND i.due_date IS NOT NULL " +
         "    AND i.estimated_hours IS NOT NULL " +
@@ -60,7 +62,7 @@ public class WorkloadRepository {
         "FROM users u " +
         "JOIN groups_users gu ON gu.user_id = u.id " +
         "JOIN users g ON g.id = gu.group_id " +
-        "WHERE g.lastname = ? " +
+        "WHERE g.lastname = ?  and u.status = 1 and g.status = 1 "+
         "ORDER BY user_fullname";
 
     public List<WorkloadData> getWorkloadData(String groupName, String userFullname, 
@@ -120,6 +122,8 @@ public class WorkloadRepository {
             "JOIN issue_statuses s ON s.id = i.status_id " +
             "WHERE " +
             "    g.lastname = ? " +
+            "    AND u.status = 1 " +
+            "    AND g.status = 1 " +
             "    AND i.start_date IS NOT NULL " +
             "    AND i.due_date IS NOT NULL " +
             "    AND i.estimated_hours IS NOT NULL " +
@@ -220,10 +224,12 @@ public class WorkloadRepository {
             "WHERE " +
             "    g.lastname = ? " +
             "    AND (? IS NULL OR ? = '' OR CONCAT(u.lastname, u.firstname) = ?) " +
+            "    AND u.status = 1 " +
+            "    AND g.status = 1 " +
             "    AND i.start_date IS NOT NULL " +
             "    AND i.due_date IS NOT NULL " +
             "    AND i.estimated_hours IS NOT NULL " +
-            "    AND (i.start_date <= ? OR i.due_date >= ?) " +
+            "    AND (i.start_date <= ? and i.due_date >= ?) " +
             "ORDER BY g.lastname, user_fullname, p.name, i.id ASC";
         
         // 生成完整的 SQL 指令用於除錯
